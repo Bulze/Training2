@@ -22,6 +22,7 @@ import { Play, Pause, CheckCircle2, XCircle, Trophy, Settings, Users, Trash2, Lo
 import { cn } from "@/lib/utils";
 import { CreateValue } from "@/sdk/database/orm/client";
 import { DataType, SimpleSelector } from "@/sdk/database/orm/common";
+import Player from "@vimeo/player";
 
 export const Route = createFileRoute("/")({
 	component: App,
@@ -56,6 +57,25 @@ function getLoomVideoId(url: string): string | null {
 	const patterns = [
 		/(?:https?:\/\/)?(?:www\.)?loom\.com\/share\/([a-zA-Z0-9]+)/,
 		/(?:https?:\/\/)?(?:www\.)?loom\.com\/embed\/([a-zA-Z0-9]+)/,
+	];
+
+	for (const pattern of patterns) {
+		const match = url.match(pattern);
+		if (match) return match[1];
+	}
+
+	return null;
+}
+
+// Helper function to extract Vimeo video ID from URL
+function getVimeoVideoId(url: string): string | null {
+	if (!url) return null;
+
+	const patterns = [
+		/(?:https?:\/\/)?(?:www\.)?vimeo\.com\/(\d+)/,
+		/(?:https?:\/\/)?(?:www\.)?vimeo\.com\/channels\/[^/]+\/(\d+)/,
+		/(?:https?:\/\/)?(?:www\.)?vimeo\.com\/album\/\d+\/video\/(\d+)/,
+		/(?:https?:\/\/)?player\.vimeo\.com\/video\/(\d+)/,
 	];
 
 	for (const pattern of patterns) {
@@ -382,7 +402,7 @@ function CreateTrainingPanel() {
 									setVideoUrl(e.target.value);
 									setVideoFile(null); // Clear file if URL is entered
 								}}
-								placeholder="https://www.youtube.com/watch?v=... or https://loom.com/share/... or https://example.com/video.mp4"
+								placeholder="https://www.youtube.com/watch?v=... or https://vimeo.com/... or https://loom.com/share/... or https://example.com/video.mp4"
 								disabled={!!videoFile}
 							/>
 						</div>
@@ -1048,21 +1068,26 @@ function VideoPlayer({
 	const [ytPlayer, setYtPlayer] = useState<any>(null);
 	const [ytDuration, setYtDuration] = useState(0);
 	const [loomPlayer, setLoomPlayer] = useState<any>(null);
+	const [vimeoDuration, setVimeoDuration] = useState(0);
 	const videoRef = useRef<HTMLVideoElement>(null);
 	const iframeRef = useRef<HTMLIFrameElement>(null);
 	const loomIframeRef = useRef<HTMLIFrameElement>(null);
+	const vimeoIframeRef = useRef<HTMLIFrameElement>(null);
 	const ytIntervalRef = useRef<NodeJS.Timeout | null>(null);
 	const maxWatchedTimeRef = useRef(0);
 	const lastAutoSaveRef = useRef(0);
+	const vimeoPlayerRef = useRef<Player | null>(null);
 	const queryClient = useQueryClient();
 
 	const progressOrm = UserProgressORM.getInstance();
 
-	// Check if video is YouTube or Loom
+	// Check if video is YouTube, Loom, or Vimeo
 	const youtubeId = getYouTubeVideoId(video.url);
 	const loomId = getLoomVideoId(video.url);
+	const vimeoId = getVimeoVideoId(video.url);
 	const isYouTube = youtubeId !== null;
 	const isLoom = loomId !== null;
+	const isVimeo = vimeoId !== null;
 
 	const { data: existingProgress } = useQuery({
 		queryKey: ["videoProgress", userId, video.id],
@@ -1215,6 +1240,51 @@ function VideoPlayer({
 		};
 	}, [isLoom, loomId, hasWatchedFull, video.duration]);
 
+	// Vimeo player initialization and tracking
+	useEffect(() => {
+		if (!isVimeo || !vimeoIframeRef.current || !vimeoId) return;
+
+		const player = new Player(vimeoIframeRef.current);
+		vimeoPlayerRef.current = player;
+
+		const handleLoaded = async () => {
+			try {
+				const duration = await player.getDuration();
+				if (duration > 0) {
+					setVimeoDuration(duration);
+				}
+				const savedTime = existingProgress?.current_timestamp_watched || 0;
+				if (savedTime > 0) {
+					await player.setCurrentTime(savedTime);
+				}
+			} catch (error) {
+				console.warn("Failed to initialize Vimeo player:", error);
+			}
+		};
+
+		const handleTimeUpdate = (data: { seconds: number; duration: number }) => {
+			const duration = data.duration || vimeoDuration || video.duration;
+			enforceNoSkip(data.seconds, duration, "vimeo");
+		};
+
+		const handleEnded = () => {
+			setHasWatchedFull(true);
+			saveProgress.mutate(true);
+		};
+
+		player.on("loaded", handleLoaded);
+		player.on("timeupdate", handleTimeUpdate);
+		player.on("ended", handleEnded);
+
+		return () => {
+			player.off("loaded", handleLoaded);
+			player.off("timeupdate", handleTimeUpdate);
+			player.off("ended", handleEnded);
+			player.destroy();
+			vimeoPlayerRef.current = null;
+		};
+	}, [isVimeo, vimeoId, video.duration, existingProgress?.current_timestamp_watched]);
+
 	const skipBufferSeconds = 1.5;
 
 	const updateMaxWatchedTime = (time: number) => {
@@ -1228,7 +1298,7 @@ function VideoPlayer({
 	const enforceNoSkip = (
 		time: number,
 		duration: number,
-		source: "html" | "youtube" | "loom",
+		source: "html" | "youtube" | "loom" | "vimeo",
 	) => {
 		const maxAllowed = maxWatchedTimeRef.current + skipBufferSeconds;
 		setCurrentTime(time);
@@ -1248,6 +1318,9 @@ function VideoPlayer({
 					{ method: "setCurrentTime", value: target },
 					"https://www.loom.com",
 				);
+			}
+			if (source === "vimeo" && vimeoPlayerRef.current?.setCurrentTime) {
+				vimeoPlayerRef.current.setCurrentTime(target).catch(() => {});
 			}
 
 			return;
@@ -1400,6 +1473,16 @@ function VideoPlayer({
 								title={video.title}
 								allow="autoplay"
 							/>
+						) : isVimeo ? (
+							<iframe
+								ref={vimeoIframeRef}
+								src={`https://player.vimeo.com/video/${vimeoId}?dnt=1&transparent=0&title=0&byline=0&portrait=0&controls=0`}
+								frameBorder="0"
+								allow="autoplay; fullscreen; picture-in-picture"
+								allowFullScreen
+								className="w-full h-full"
+								title={video.title}
+							/>
 						) : (
 							<>
 								<video
@@ -1438,7 +1521,7 @@ function VideoPlayer({
 						</Alert>
 					)}
 
-					{!isYouTube && !isLoom && (
+					{!isYouTube && !isLoom && !isVimeo && (
 						<>
 							<div className="space-y-2">
 								<div className="flex justify-between items-center text-sm text-slate-600">
@@ -1523,6 +1606,41 @@ function VideoPlayer({
 									<AlertDescription className="text-blue-200">
 										Watch at least 95% of the video to unlock the quiz. Current progress:{" "}
 										{Math.floor((maxWatchedTime / video.duration) * 100)}%
+									</AlertDescription>
+								</Alert>
+							)}
+
+							{hasWatchedFull && (
+								<Alert className="bg-green-900/50 border-green-700">
+									<CheckCircle2 className="h-4 w-4 text-green-400" />
+									<AlertDescription className="text-green-200">
+										Video completed! You can now proceed to the quiz.
+									</AlertDescription>
+								</Alert>
+							)}
+						</div>
+					)}
+
+					{isVimeo && (
+						<div className="space-y-4">
+							<div className="space-y-2">
+								<div className="flex justify-between items-center text-sm text-slate-300">
+									<span>Progress</span>
+									<span>
+										{Math.floor(maxWatchedTime)}s / {vimeoDuration ? Math.floor(vimeoDuration) : video.duration ? Math.floor(video.duration) : "?"}s
+									</span>
+								</div>
+								<Progress
+									value={vimeoDuration ? (maxWatchedTime / vimeoDuration) * 100 : video.duration ? (maxWatchedTime / video.duration) * 100 : 0}
+									className="h-2"
+								/>
+							</div>
+
+							{!hasWatchedFull && (
+								<Alert className="bg-blue-900/50 border-blue-700">
+									<AlertDescription className="text-blue-200">
+										Watch at least 95% of the video to unlock the quiz. Current progress:{" "}
+										{vimeoDuration ? Math.floor((maxWatchedTime / vimeoDuration) * 100) : video.duration ? Math.floor((maxWatchedTime / video.duration) * 100) : 0}%
 									</AlertDescription>
 								</Alert>
 							)}
