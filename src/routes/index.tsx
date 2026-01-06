@@ -120,6 +120,40 @@ function evaluateAnswerLocally(question: string, idealAnswer: string, userAnswer
 	};
 }
 
+async function evaluateAnswerWithGrok(
+	question: string,
+	idealAnswer: string,
+	userAnswer: string,
+) {
+	const apiBase = import.meta.env.VITE_API_BASE_PATH || "";
+	if (!apiBase) return null;
+
+	const controller = new AbortController();
+	const timeoutId = window.setTimeout(() => controller.abort(), 20000);
+
+	try {
+		const response = await fetch(`${apiBase}/ai/evaluate`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				question,
+				idealAnswer,
+				userAnswer,
+			}),
+			signal: controller.signal,
+		});
+
+		if (!response.ok) return null;
+		return (await response.json()) as { correct?: boolean; score?: number; feedback?: string };
+	} catch {
+		return null;
+	} finally {
+		window.clearTimeout(timeoutId);
+	}
+}
+
 function App() {
 	const [view, setView] = useState<"admin" | "user">("user");
 	const [currentUser, setCurrentUser] = useState<UsersModel | null>(null);
@@ -1106,6 +1140,9 @@ function VideoPlayer({
 
 	// Reset video when component mounts or video changes
 	useEffect(() => {
+		setIsPlaying(false);
+		setVimeoDuration(0);
+		setVimeoError(null);
 		const savedTime = existingProgress?.current_timestamp_watched || 0;
 		setCurrentTime(savedTime);
 		setMaxWatchedTime(savedTime);
@@ -1498,7 +1535,7 @@ function VideoPlayer({
 							<>
 								<iframe
 									ref={vimeoIframeRef}
-									src={`https://player.vimeo.com/video/${vimeoId}?dnt=1&transparent=0&title=0&byline=0&portrait=0&controls=0`}
+									src={`https://player.vimeo.com/video/${vimeoId}?dnt=1&transparent=0&title=0&byline=0&portrait=0&controls=0&keyboard=0`}
 									frameBorder="0"
 									allow="autoplay; fullscreen; picture-in-picture"
 									allowFullScreen
@@ -1506,7 +1543,7 @@ function VideoPlayer({
 									title={video.title}
 								/>
 								{!isPlaying && (
-									<div className="absolute inset-0 flex items-center justify-center">
+									<div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40">
 										<Button
 											size="lg"
 											onClick={async () => {
@@ -1525,7 +1562,7 @@ function VideoPlayer({
 									</div>
 								)}
 								{vimeoError && (
-									<div className="absolute bottom-3 left-3 right-3">
+									<div className="absolute bottom-3 left-3 right-3 z-20">
 										<Alert className="bg-red-900/70 border-red-700">
 											<AlertDescription className="text-red-200">
 												{vimeoError}
@@ -1814,13 +1851,24 @@ function QuizInterface({
 				isCorrect = userAnswerTrimmed.length > 0;
 				feedback = isCorrect ? "Correct - Text answer provided" : "Incorrect - Empty answer";
 			} else {
-				const localResult = evaluateAnswerLocally(
+				const grokResult = await evaluateAnswerWithGrok(
 					question.text,
 					question.ideal_answer,
 					userAnswer,
 				);
-				isCorrect = localResult.isCorrect;
-				feedback = localResult.feedback;
+
+				if (grokResult && typeof grokResult.correct === "boolean") {
+					isCorrect = grokResult.correct;
+					feedback = grokResult.feedback || feedback;
+				} else {
+					const localResult = evaluateAnswerLocally(
+						question.text,
+						question.ideal_answer,
+						userAnswer,
+					);
+					isCorrect = localResult.isCorrect;
+					feedback = localResult.feedback;
+				}
 			}
 
 			results.push({ isCorrect, feedback, questionId: question.id });

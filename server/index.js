@@ -9,6 +9,9 @@ const PORT = Number(process.env.PORT || process.env.LOCAL_API_PORT || 3001);
 const DB_PATH = process.env.LOCAL_DB_PATH || path.join(process.cwd(), "local-db.json");
 const DATABASE_URL = process.env.DATABASE_URL || "";
 const USE_POSTGRES = Boolean(DATABASE_URL);
+const GROK_API_KEY = process.env.GROK_API_KEY || "";
+const GROK_MODEL = process.env.GROK_MODEL || "grok-2-latest";
+const GROK_THRESHOLD = Number.parseFloat(process.env.GROK_THRESHOLD || "0.7");
 
 const app = express();
 app.use(cors());
@@ -380,8 +383,90 @@ function respondWithData(res, records, page) {
   });
 }
 
+function clampScore(value) {
+  if (Number.isNaN(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function parseJsonObject(text) {
+  if (!text) return null;
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
 app.get("/me", (_req, res) => {
   res.json({ ok: true, userId: "local-user" });
+});
+
+app.post("/ai/evaluate", async (req, res) => {
+  if (!GROK_API_KEY) {
+    res.status(503).json({ error: "grok_not_configured" });
+    return;
+  }
+
+  const { question, idealAnswer, userAnswer, threshold } = req.body || {};
+  if (!idealAnswer || !userAnswer) {
+    res.status(400).json({ error: "missing_fields" });
+    return;
+  }
+
+  const scoreThreshold = Number.isFinite(threshold) ? threshold : GROK_THRESHOLD;
+
+  const prompt = `Evaluate semantic similarity between the ideal answer and the user answer for the question.
+Return only JSON with fields: score (0 to 1) and feedback (short).
+Accept paraphrases and different wording if meaning matches.
+
+Question: ${question || ""}
+Ideal answer: ${idealAnswer}
+User answer: ${userAnswer}`;
+
+  try {
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${GROK_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: GROK_MODEL,
+        temperature: 0.2,
+        messages: [
+          {
+            role: "system",
+            content: "Return only JSON. No extra text.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      res.status(502).json({ error: "grok_request_failed", detail: text });
+      return;
+    }
+
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content || "";
+    const parsed = parseJsonObject(content);
+    const score = clampScore(Number(parsed?.score));
+    const feedback = typeof parsed?.feedback === "string" ? parsed.feedback : "Answer evaluated.";
+    const correct = score >= scoreThreshold;
+
+    res.json({ correct, score, feedback });
+  } catch (error) {
+    console.error("Grok evaluation failed:", error);
+    res.status(500).json({ error: "grok_unavailable" });
+  }
 });
 
 app.post("/data/store/v1/all", async (req, res, next) => {
