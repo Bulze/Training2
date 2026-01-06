@@ -1,0 +1,104 @@
+{
+  "records": {
+    "01987547fc6c72ecb453bd2736bd4ea0:users": {
+      "091af2c2-b8ec-4043-acb2-6305b2544b66": {
+        "id": "091af2c2-b8ec-4043-acb2-6305b2544b66",
+        "data_creator": "local",
+        "data_updater": "local",
+        "create_time": "1767721079",
+        "update_time": "1767721079",
+        "name": "Admin",
+        "email": "admin@platform.com",
+        "is_admin": true,
+        "password": "admin"
+      },
+      "2c0994a2-7a73-4464-b307-ba3c4055c814": {
+        "id": "2c0994a2-7a73-4464-b307-ba3c4055c814",
+        "data_creator": "local",
+        "data_updater": "local",
+        "create_time": "1767721079",
+        "update_time": "1767721079",
+        "name": "Admin",
+        "email": "admin@platform.com",
+        "is_admin": true,
+        "password": "admin"
+      },
+      "a6cb837a-2202-4568-b53f-e29bf413724e": {
+        "id": "a6cb837a-2202-4568-b53f-e29bf413724e",
+        "data_creator": "local",
+        "data_updater": "local",
+        "create_time": "1767721083",
+        "update_time": "1767721083",
+        "name": "aaa",
+        "email": "aaa@gmai.com",
+        "is_admin": false,
+        "password": "null"
+      },
+      "7299be46-188e-42f5-bb29-0368e8b32979": {
+        "id": "7299be46-188e-42f5-bb29-0368e8b32979",
+        "data_creator": "local",
+        "data_updater": "local",
+        "create_time": "1767721425",
+        "update_time": "1767721425",
+        "name": "aaa",
+        "email": "azeradjanin1@gmail.com",
+        "is_admin": false,
+        "password": "null"
+      },
+      "210b55b3-27ce-4a1a-8d60-299457590983": {
+        "id": "210b55b3-27ce-4a1a-8d60-299457590983",
+        "data_creator": "local",
+        "data_updater": "local",
+        "create_time": "1767721693",
+        "update_time": "1767721693",
+        "name": "test",
+        "email": "test@gmail.com",
+        "is_admin": false,
+        "password": "null"
+      }
+    },
+    "01987547fc6c72ecb453bd2736bd4ea0:videos": {
+      "197ad989-5149-49d7-b35f-db975c436796": {
+        "id": "197ad989-5149-49d7-b35f-db975c436796",
+        "data_creator": "local",
+        "data_updater": "local",
+        "create_time": "1767721129",
+        "update_time": "1767721129",
+        "title": "aaa",
+        "description": "asd",
+        "url": "https://www.youtube.com/watch?v=WkBHhWDNDWo",
+        "duration": 11
+      }
+    },
+    "01987547fc6c72ecb453bd2736bd4ea0:user_progress": {},
+    "01987547fc6c72ecb453bd2736bd4ea0:completions": {},
+    "01987547fc6c72ecb453bd2736bd4ea0:training_sessions": {
+      "a196dabe-2d5c-4f5e-856b-8259652c23ce": {
+        "id": "a196dabe-2d5c-4f5e-856b-8259652c23ce",
+        "data_creator": "local",
+        "data_updater": "local",
+        "create_time": "1767721129",
+        "update_time": "1767721129",
+        "video_id": "197ad989-5149-49d7-b35f-db975c436796",
+        "pass_threshold": 1,
+        "total_questions": 1,
+        "is_active": true,
+        "verification_code": "aaa!"
+      }
+    },
+    "01987547fc6c72ecb453bd2736bd4ea0:quiz_attempts": {},
+    "01987547fc6c72ecb453bd2736bd4ea0:questions": {
+      "7ef91fc8-730f-4c2f-91a3-eb42dc62cdf7": {
+        "id": "7ef91fc8-730f-4c2f-91a3-eb42dc62cdf7",
+        "data_creator": "local",
+        "data_updater": "local",
+        "create_time": "1767721129",
+        "update_time": "1767721129",
+        "video_id": "197ad989-5149-49d7-b35f-db975c436796",
+        "text": "aa",
+        "ideal_answer": "aa",
+        "sequence_number": 1
+      }
+    }
+  }
+}
