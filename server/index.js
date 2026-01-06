@@ -270,9 +270,21 @@ function rowToObject(row) {
   };
 }
 
+function normalizeConnectionString(input) {
+  try {
+    const url = new URL(input);
+    url.searchParams.delete("sslmode");
+    return url.toString();
+  } catch {
+    return input;
+  }
+}
+
 async function initPostgres() {
-  const ssl = process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false };
-  pool = new Pool({ connectionString: DATABASE_URL, ssl });
+  const rejectUnauthorized = process.env.PG_REJECT_UNAUTHORIZED === "true";
+  const ssl = process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized };
+  const connectionString = normalizeConnectionString(DATABASE_URL);
+  pool = new Pool({ connectionString, ssl });
   await pool.query(`
     CREATE TABLE IF NOT EXISTS records (
       entity_key TEXT NOT NULL,
