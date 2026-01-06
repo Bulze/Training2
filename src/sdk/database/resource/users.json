@@ -1,0 +1,139 @@
+{
+  "id": "102019b89d5c188744ba099fac9e05c6834",
+  "version": "102019b8b5a5c89707ba4faf28a57fbb8d2",
+  "schema": {
+    "name": "users",
+    "description": "Stores user profile information for authentication and management.",
+    "fields": [
+      {
+        "name": "id",
+        "description": "Unique identifier for the user.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public identifier"
+        }
+      },
+      {
+        "name": "data_creator",
+        "description": "id of the user who creates the record",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Internal audit"
+        }
+      },
+      {
+        "name": "data_updater",
+        "description": "id of the user who updates the record",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Internal audit"
+        }
+      },
+      {
+        "name": "create_time",
+        "description": "create time in timestamp unix",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public metadata"
+        },
+        "format": "timestamp"
+      },
+      {
+        "name": "update_time",
+        "description": "update time in timestamp unix",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public metadata"
+        },
+        "format": "timestamp"
+      },
+      {
+        "name": "name",
+        "description": "User full name.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "PII"
+        }
+      },
+      {
+        "name": "email",
+        "description": "User email address.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "PII"
+        },
+        "format": "email"
+      },
+      {
+        "name": "is_admin",
+        "description": "Indicates if the user has admin privileges.",
+        "type": 3,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Access control"
+        }
+      },
+      {
+        "name": "password",
+        "description": "Encrypted password for admin login.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 4,
+          "reason": "Authentication credential"
+        },
+        "nullable": true,
+        "encryption": true,
+        "format": "password"
+      }
+    ],
+    "indexes": [
+      {
+        "fields": [
+          "id"
+        ],
+        "unique": true,
+        "primary": true,
+        "order": false
+      },
+      {
+        "fields": [
+          "data_creator"
+        ],
+        "order": false
+      },
+      {
+        "fields": [
+          "data_updater"
+        ],
+        "order": false
+      },
+      {
+        "fields": [
+          "email"
+        ],
+        "unique": true,
+        "order": false
+      }
+    ]
+  },
+  "task": {
+    "id": "695af84d032b09907ce19394",
+    "root": "695a8ab93c0e72020feb5a35",
+    "project": "695a8ab93c0e72020feb5a34",
+    "user": "389153c0-60b1-70e2-02f5-c3df2e4b351d"
+  },
+  "namespace": {
+    "id": "01987547fc6c72ecb453bd2736bd4ea0",
+    "tenant": 2,
+    "name": "global-1",
+    "default": true
+  },
+  "revision": 1
+}

@@ -1,0 +1,184 @@
+{
+  "id": "102019b89b1275678df97a73789c5c47899",
+  "version": "102019b8b5a5c89707ba4faf28a57fbb8d2",
+  "schema": {
+    "name": "completions",
+    "description": "Records successful completions of video training sessions.",
+    "fields": [
+      {
+        "name": "id",
+        "description": "Unique identifier for the completion record.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public identifier"
+        }
+      },
+      {
+        "name": "data_creator",
+        "description": "id of the user who creates the record",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Internal audit"
+        }
+      },
+      {
+        "name": "data_updater",
+        "description": "id of the user who updates the record",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Internal audit"
+        }
+      },
+      {
+        "name": "create_time",
+        "description": "create time in timestamp unix",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public metadata"
+        },
+        "format": "timestamp"
+      },
+      {
+        "name": "update_time",
+        "description": "update time in timestamp unix",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public metadata"
+        },
+        "format": "timestamp"
+      },
+      {
+        "name": "user_id",
+        "description": "Identifier of the user.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Internal reference"
+        }
+      },
+      {
+        "name": "video_id",
+        "description": "Foreign key referencing the video completed.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public relation"
+        }
+      },
+      {
+        "name": "completion_code",
+        "description": "Unique identifier code for the completion.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Verification data"
+        }
+      },
+      {
+        "name": "score",
+        "description": "Number of correct answers achieved.",
+        "type": 2,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Performance metric"
+        },
+        "numeric": "int"
+      },
+      {
+        "name": "completed_at",
+        "description": "Timestamp when the completion occurred.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Internal audit"
+        },
+        "format": "timestamp"
+      }
+    ],
+    "indexes": [
+      {
+        "fields": [
+          "id"
+        ],
+        "unique": true,
+        "primary": true,
+        "order": false
+      },
+      {
+        "fields": [
+          "data_creator"
+        ],
+        "order": false
+      },
+      {
+        "fields": [
+          "data_updater"
+        ],
+        "order": false
+      },
+      {
+        "fields": [
+          "user_id"
+        ],
+        "order": false
+      },
+      {
+        "fields": [
+          "video_id"
+        ],
+        "order": false
+      },
+      {
+        "fields": [
+          "completion_code"
+        ],
+        "unique": true,
+        "order": false
+      }
+    ],
+    "relations": [
+      {
+        "referencing_fields": [
+          "video_id"
+        ],
+        "referenced_entity": {
+          "name": "videos"
+        },
+        "referenced_fields": [
+          "id"
+        ],
+        "cascade": true
+      },
+      {
+        "referencing_fields": [
+          "user_id"
+        ],
+        "referenced_entity": {
+          "name": "users"
+        },
+        "referenced_fields": [
+          "id"
+        ],
+        "cascade": true
+      }
+    ]
+  },
+  "task": {
+    "id": "695af84d032b09907ce19394",
+    "root": "695a8ab93c0e72020feb5a35",
+    "project": "695a8ab93c0e72020feb5a34",
+    "user": "389153c0-60b1-70e2-02f5-c3df2e4b351d"
+  },
+  "namespace": {
+    "id": "01987547fc6c72ecb453bd2736bd4ea0",
+    "tenant": 2,
+    "name": "global-1",
+    "default": true
+  },
+  "revision": 1
+}

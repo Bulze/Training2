@@ -1,0 +1,156 @@
+{
+  "id": "102019b89b12756711eb339949f573585da",
+  "version": "102019b8b5a5c89707ba4faf28a57fbb8d2",
+  "schema": {
+    "name": "questions",
+    "description": "Stores questions related to specific videos for assessment.",
+    "fields": [
+      {
+        "name": "id",
+        "description": "Unique identifier for the question.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public identifier"
+        }
+      },
+      {
+        "name": "data_creator",
+        "description": "id of the user who creates the record",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Internal audit"
+        }
+      },
+      {
+        "name": "data_updater",
+        "description": "id of the user who updates the record",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Internal audit"
+        }
+      },
+      {
+        "name": "create_time",
+        "description": "create time in timestamp unix",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public metadata"
+        },
+        "format": "timestamp"
+      },
+      {
+        "name": "update_time",
+        "description": "update time in timestamp unix",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public metadata"
+        },
+        "format": "timestamp"
+      },
+      {
+        "name": "video_id",
+        "description": "Foreign key referencing the video this question belongs to.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public relation"
+        }
+      },
+      {
+        "name": "text",
+        "description": "The actual text of the question.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public content"
+        }
+      },
+      {
+        "name": "ideal_answer",
+        "description": "The reference answer used for AI comparison.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Internal reference data"
+        }
+      },
+      {
+        "name": "sequence_number",
+        "description": "The order of the question in the quiz.",
+        "type": 2,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public metadata"
+        },
+        "numeric": "int"
+      }
+    ],
+    "indexes": [
+      {
+        "fields": [
+          "id"
+        ],
+        "unique": true,
+        "primary": true,
+        "order": false
+      },
+      {
+        "fields": [
+          "data_creator"
+        ],
+        "order": false
+      },
+      {
+        "fields": [
+          "data_updater"
+        ],
+        "order": false
+      },
+      {
+        "fields": [
+          "video_id"
+        ],
+        "order": false
+      },
+      {
+        "fields": [
+          "sequence_number",
+          "video_id"
+        ],
+        "order": true
+      }
+    ],
+    "relations": [
+      {
+        "referencing_fields": [
+          "video_id"
+        ],
+        "referenced_entity": {
+          "name": "videos"
+        },
+        "referenced_fields": [
+          "id"
+        ],
+        "cascade": true
+      }
+    ]
+  },
+  "task": {
+    "id": "695af84d032b09907ce19394",
+    "root": "695a8ab93c0e72020feb5a35",
+    "project": "695a8ab93c0e72020feb5a34",
+    "user": "389153c0-60b1-70e2-02f5-c3df2e4b351d"
+  },
+  "namespace": {
+    "id": "01987547fc6c72ecb453bd2736bd4ea0",
+    "tenant": 2,
+    "name": "global-1",
+    "default": true
+  },
+  "revision": 1
+}

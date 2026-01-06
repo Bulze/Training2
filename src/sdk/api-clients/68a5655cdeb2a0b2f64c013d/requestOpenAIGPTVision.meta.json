@@ -1,0 +1,6 @@
+{
+  "integrationId": "api:68a5655cdeb2a0b2f64c013d",
+  "name": "OpenAIGPTVision",
+  "description": "Add OpenAI GPT 4.1 for image recognition and analysis to your app. Enable your app to recognize and analyze images instantly with no setup, accounts, or API keys required.",
+  "docPath": "src/sdk/api-clients/68a5655cdeb2a0b2f64c013d/requestOpenAIGPTVision.md"
+}

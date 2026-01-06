@@ -1,0 +1,136 @@
+{
+  "id": "102019b89e346577da29d8f8cc85c978a90",
+  "version": "102019b89e346577b948eb12bbae6a852be",
+  "schema": {
+    "name": "videos",
+    "description": "Stores core information about training videos.",
+    "fields": [
+      {
+        "name": "id",
+        "description": "Unique identifier for the video.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public identifier"
+        }
+      },
+      {
+        "name": "data_creator",
+        "description": "id of the user who creates the record",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Internal audit"
+        }
+      },
+      {
+        "name": "data_updater",
+        "description": "id of the user who updates the record",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Internal audit"
+        }
+      },
+      {
+        "name": "create_time",
+        "description": "create time in timestamp unix",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public metadata"
+        },
+        "format": "timestamp"
+      },
+      {
+        "name": "update_time",
+        "description": "update time in timestamp unix",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public metadata"
+        },
+        "format": "timestamp"
+      },
+      {
+        "name": "title",
+        "description": "Title of the video.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public content"
+        }
+      },
+      {
+        "name": "description",
+        "description": "Description of the video content.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public content"
+        },
+        "nullable": true
+      },
+      {
+        "name": "url",
+        "description": "URL or path to the video file.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public content location"
+        }
+      },
+      {
+        "name": "duration",
+        "description": "Duration of the video in seconds.",
+        "type": 2,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public metadata"
+        },
+        "numeric": "int"
+      }
+    ],
+    "indexes": [
+      {
+        "fields": [
+          "id"
+        ],
+        "unique": true,
+        "primary": true,
+        "order": false
+      },
+      {
+        "fields": [
+          "data_creator"
+        ],
+        "order": false
+      },
+      {
+        "fields": [
+          "data_updater"
+        ],
+        "order": false
+      },
+      {
+        "fields": [
+          "title"
+        ],
+        "order": false
+      }
+    ]
+  },
+  "task": {
+    "id": "695a979393131a81503f7e32",
+    "root": "695a8ab93c0e72020feb5a35",
+    "project": "695a8ab93c0e72020feb5a34",
+    "user": "389153c0-60b1-70e2-02f5-c3df2e4b351d"
+  },
+  "namespace": {
+    "id": "01987547fc6c72ecb453bd2736bd4ea0",
+    "tenant": 2,
+    "name": "global-1",
+    "default": true
+  },
+  "revision": 1
+}

@@ -1,0 +1,213 @@
+{
+  "id": "102019b89b1275676b9986d68e0f1a9a3f8",
+  "version": "102019b8b5a5c89707ba4faf28a57fbb8d2",
+  "schema": {
+    "name": "quiz_attempts",
+    "description": "Stores individual user attempts at answering questions.",
+    "fields": [
+      {
+        "name": "id",
+        "description": "Unique identifier for the quiz attempt.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public identifier"
+        }
+      },
+      {
+        "name": "data_creator",
+        "description": "id of the user who creates the record",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Internal audit"
+        }
+      },
+      {
+        "name": "data_updater",
+        "description": "id of the user who updates the record",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Internal audit"
+        }
+      },
+      {
+        "name": "create_time",
+        "description": "create time in timestamp unix",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public metadata"
+        },
+        "format": "timestamp"
+      },
+      {
+        "name": "update_time",
+        "description": "update time in timestamp unix",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public metadata"
+        },
+        "format": "timestamp"
+      },
+      {
+        "name": "user_id",
+        "description": "Identifier of the user.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Internal reference"
+        }
+      },
+      {
+        "name": "video_id",
+        "description": "Foreign key referencing the video.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public relation"
+        }
+      },
+      {
+        "name": "question_id",
+        "description": "Foreign key referencing the question attempted.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 1,
+          "reason": "Public relation"
+        }
+      },
+      {
+        "name": "user_answer",
+        "description": "The answer text provided by the user.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 3,
+          "reason": "User generated content"
+        }
+      },
+      {
+        "name": "is_correct",
+        "description": "AI evaluation result of the answer.",
+        "type": 3,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Performance metric"
+        }
+      },
+      {
+        "name": "ai_feedback",
+        "description": "Reasoning or explanation provided by AI.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Generated content"
+        },
+        "nullable": true
+      },
+      {
+        "name": "attempted_at",
+        "description": "Timestamp when the attempt occurred.",
+        "type": 1,
+        "compliance": {
+          "confidentiality": 2,
+          "reason": "Internal audit"
+        },
+        "format": "timestamp"
+      }
+    ],
+    "indexes": [
+      {
+        "fields": [
+          "id"
+        ],
+        "unique": true,
+        "primary": true,
+        "order": false
+      },
+      {
+        "fields": [
+          "data_creator"
+        ],
+        "order": false
+      },
+      {
+        "fields": [
+          "data_updater"
+        ],
+        "order": false
+      },
+      {
+        "fields": [
+          "user_id"
+        ],
+        "order": false
+      },
+      {
+        "fields": [
+          "video_id"
+        ],
+        "order": false
+      },
+      {
+        "fields": [
+          "question_id"
+        ],
+        "order": false
+      }
+    ],
+    "relations": [
+      {
+        "referencing_fields": [
+          "video_id"
+        ],
+        "referenced_entity": {
+          "name": "videos"
+        },
+        "referenced_fields": [
+          "id"
+        ],
+        "cascade": true
+      },
+      {
+        "referencing_fields": [
+          "question_id"
+        ],
+        "referenced_entity": {
+          "name": "questions"
+        },
+        "referenced_fields": [
+          "id"
+        ],
+        "cascade": true
+      },
+      {
+        "referencing_fields": [
+          "user_id"
+        ],
+        "referenced_entity": {
+          "name": "users"
+        },
+        "referenced_fields": [
+          "id"
+        ],
+        "cascade": true
+      }
+    ]
+  },
+  "task": {
+    "id": "695af84d032b09907ce19394",
+    "root": "695a8ab93c0e72020feb5a35",
+    "project": "695a8ab93c0e72020feb5a34",
+    "user": "389153c0-60b1-70e2-02f5-c3df2e4b351d"
+  },
+  "namespace": {
+    "id": "01987547fc6c72ecb453bd2736bd4ea0",
+    "tenant": 2,
+    "name": "global-1",
+    "default": true
+  },
+  "revision": 1
+}
