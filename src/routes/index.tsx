@@ -1069,6 +1069,7 @@ function VideoPlayer({
 	const [ytDuration, setYtDuration] = useState(0);
 	const [loomPlayer, setLoomPlayer] = useState<any>(null);
 	const [vimeoDuration, setVimeoDuration] = useState(0);
+	const [vimeoError, setVimeoError] = useState<string | null>(null);
 	const videoRef = useRef<HTMLVideoElement>(null);
 	const iframeRef = useRef<HTMLIFrameElement>(null);
 	const loomIframeRef = useRef<HTMLIFrameElement>(null);
@@ -1259,6 +1260,7 @@ function VideoPlayer({
 				}
 			} catch (error) {
 				console.warn("Failed to initialize Vimeo player:", error);
+				setVimeoError("Unable to load Vimeo video. Check embed permissions.");
 			}
 		};
 
@@ -1267,19 +1269,38 @@ function VideoPlayer({
 			enforceNoSkip(data.seconds, duration, "vimeo");
 		};
 
+		const handlePlay = () => {
+			setIsPlaying(true);
+		};
+
+		const handlePause = () => {
+			setIsPlaying(false);
+		};
+
 		const handleEnded = () => {
+			setIsPlaying(false);
 			setHasWatchedFull(true);
 			saveProgress.mutate(true);
 		};
 
+		const handleError = () => {
+			setVimeoError("Unable to play Vimeo video. Check privacy settings.");
+		};
+
 		player.on("loaded", handleLoaded);
 		player.on("timeupdate", handleTimeUpdate);
+		player.on("play", handlePlay);
+		player.on("pause", handlePause);
 		player.on("ended", handleEnded);
+		player.on("error", handleError);
 
 		return () => {
 			player.off("loaded", handleLoaded);
 			player.off("timeupdate", handleTimeUpdate);
+			player.off("play", handlePlay);
+			player.off("pause", handlePause);
 			player.off("ended", handleEnded);
+			player.off("error", handleError);
 			player.destroy();
 			vimeoPlayerRef.current = null;
 		};
@@ -1474,15 +1495,45 @@ function VideoPlayer({
 								allow="autoplay"
 							/>
 						) : isVimeo ? (
-							<iframe
-								ref={vimeoIframeRef}
-								src={`https://player.vimeo.com/video/${vimeoId}?dnt=1&transparent=0&title=0&byline=0&portrait=0&controls=0`}
-								frameBorder="0"
-								allow="autoplay; fullscreen; picture-in-picture"
-								allowFullScreen
-								className="w-full h-full"
-								title={video.title}
-							/>
+							<>
+								<iframe
+									ref={vimeoIframeRef}
+									src={`https://player.vimeo.com/video/${vimeoId}?dnt=1&transparent=0&title=0&byline=0&portrait=0&controls=0`}
+									frameBorder="0"
+									allow="autoplay; fullscreen; picture-in-picture"
+									allowFullScreen
+									className="w-full h-full"
+									title={video.title}
+								/>
+								{!isPlaying && (
+									<div className="absolute inset-0 flex items-center justify-center">
+										<Button
+											size="lg"
+											onClick={async () => {
+												try {
+													await vimeoPlayerRef.current?.play();
+												} catch (error) {
+													console.error("Vimeo playback error:", error);
+													setVimeoError("Unable to start playback. Check Vimeo settings.");
+												}
+											}}
+											className="rounded-full w-16 h-16"
+											variant="default"
+										>
+											<Play className="w-8 h-8" />
+										</Button>
+									</div>
+								)}
+								{vimeoError && (
+									<div className="absolute bottom-3 left-3 right-3">
+										<Alert className="bg-red-900/70 border-red-700">
+											<AlertDescription className="text-red-200">
+												{vimeoError}
+											</AlertDescription>
+										</Alert>
+									</div>
+								)}
+							</>
 						) : (
 							<>
 								<video
