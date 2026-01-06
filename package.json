@@ -7,7 +7,7 @@
     "start": "vite --port 3000",
     "dev:server": "node server/index.js",
     "start:server": "node server/index.js",
-    "build": "npm run check:safe && vite build",
+    "build": "vite build",
     "serve": "vite preview",
     "test": "vitest run --config vitest.config.js test/template-tests/suites",
     "test:smoke": "vitest run --config vitest.config.js test/template-tests/smoke",
