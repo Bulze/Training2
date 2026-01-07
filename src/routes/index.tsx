@@ -2106,7 +2106,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 						name: "Admin",
 						email: "admin@platform.com",
 						is_admin: true,
-						password: "admin",
+						password: "asdce123xz",
 					} as UsersModel,
 				]);
 			}
@@ -2326,7 +2326,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 							</Button>
 
 							<p className="text-sm text-slate-500 text-center">
-								Default credentials: admin / admin
+								Default credentials: admin / asdce123xz
 							</p>
 						</>
 					)}
