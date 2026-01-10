@@ -3,3 +3,4 @@ dist
 local-db.json
 local.db
 .env.local
+payroll/.env

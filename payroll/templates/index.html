@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Payroll Studio</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div>
+          <h1>Payroll Studio</h1>
+          <p>Modern payroll analytics for chatter teams.</p>
+        </div>
+        <div class="status" id="statusText">Ready</div>
+      </header>
+
+      <section class="panel controls">
+        <div class="field wide">
+          <label>Sales Excel</label>
+          <div class="file-row">
+            <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xltx,.xltm">
+            <button class="btn accent" id="loadBtn">Load + Calculate</button>
+          </div>
+        </div>
+        <div class="field wide">
+          <label>Chats Excel (optional)</label>
+          <div class="file-row">
+            <input type="file" id="chatFileInput" accept=".xlsx,.xlsm,.xltx,.xltm">
+          </div>
+        </div>
+        <div class="field">
+          <label>Date from</label>
+          <input type="date" id="dateFrom">
+        </div>
+        <div class="field">
+          <label>Date to</label>
+          <input type="date" id="dateTo">
+        </div>
+        <div class="field">
+          <label>Default %</label>
+          <input type="number" id="defaultPercent" value="10" min="0" step="0.1">
+        </div>
+        <div class="field actions">
+          <label>AI Insights</label>
+          <div class="ai-row">
+            <label class="switch">
+              <input type="checkbox" id="aiToggle">
+              <span class="slider"></span>
+            </label>
+            <button class="btn pink" id="aiTestBtn">Test AI</button>
+          </div>
+        </div>
+        <div class="field actions">
+          <button class="btn ghost" id="clearBtn">Clear</button>
+        </div>
+      </section>
+
+      <section class="summary">
+        <div class="card">
+          <span>Total sales</span>
+          <strong id="sumSales">$0.00</strong>
+        </div>
+        <div class="card">
+          <span>Total bonus</span>
+          <strong id="sumBonus">$0.00</strong>
+        </div>
+        <div class="card">
+          <span>Total payout</span>
+          <strong id="sumTotal">$0.00</strong>
+        </div>
+      </section>
+
+      <div class="main-tabs">
+        <button class="tab-btn active" data-tab="detailTab">Chatter detail</button>
+        <button class="tab-btn" data-tab="ppvDayTab">PPV of the day</button>
+      </div>
+
+      <section class="panel grid tab-panel active" id="detailTab">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Percent</th>
+                <th>Penalty</th>
+                <th>Sales</th>
+                <th>Bonus</th>
+                <th>Base Pay</th>
+                <th>Total Pay</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+        <aside class="detail">
+          <h2 id="detailName">Select employee</h2>
+          <div class="detail-fields">
+            <div>
+              <label>Percent</label>
+              <input type="number" id="detailPercent" min="0" step="0.1">
+            </div>
+            <div>
+              <label>Penalty</label>
+              <input type="number" id="detailPenalty" min="0" step="0.01">
+            </div>
+            <button class="btn accent" id="applyBtn">Apply</button>
+          </div>
+          <div class="stats">
+            <div><span>Clocked hours</span><strong id="statClocked">-</strong></div>
+            <div><span>Scheduled hours</span><strong id="statScheduled">-</strong></div>
+            <div><span>Sales/hr</span><strong id="statSalesHour">-</strong></div>
+            <div><span>Messages/hr</span><strong id="statMsgHour">-</strong></div>
+            <div><span>Fans/hr</span><strong id="statFansHour">-</strong></div>
+            <div><span>Response (clocked)</span><strong id="statRespClock">-</strong></div>
+          </div>
+          <div class="chart-card">
+            <canvas id="salesChart" height="180"></canvas>
+          </div>
+          <div class="compare">
+            <h3>Chatter comparison</h3>
+            <div class="compare-grid">
+              <div><span>Sales rank</span><strong id="cmpSales">-</strong></div>
+              <div><span>Sales/hr rank</span><strong id="cmpSalesHour">-</strong></div>
+              <div><span>Msgs/hr rank</span><strong id="cmpMsgHour">-</strong></div>
+              <div><span>Reply time rank</span><strong id="cmpReply">-</strong></div>
+              <div><span>Paid offers rank</span><strong id="cmpPaid">-</strong></div>
+              <div><span>Chat CVR rank</span><strong id="cmpCvr">-</strong></div>
+            </div>
+          </div>
+          <div class="chat-analysis">
+            <div class="chat-columns">
+              <div>
+                <h4>Why they make money</h4>
+                <ul id="whyList"></ul>
+                <h4>How they make money</h4>
+                <ul id="howList"></ul>
+                <h4>AI PPV suggestions</h4>
+                <ul id="ppvList"></ul>
+                <h4>AI bait suggestions</h4>
+                <ul id="baitRecList"></ul>
+              </div>
+              <div>
+                <h4>Most used sentences</h4>
+                <ul id="sentencesList"></ul>
+                <h4>Most used baits</h4>
+                <ul id="baitsList"></ul>
+              </div>
+            </div>
+          </div>
+          <div class="compare-panel">
+            <h3>Compare two chatters</h3>
+            <div class="compare-selects">
+              <div>
+                <label>User A</label>
+                <select id="compareA"></select>
+              </div>
+              <div>
+                <label>User B</label>
+                <select id="compareB"></select>
+              </div>
+              <button class="btn accent" id="compareBtn">Compare</button>
+            </div>
+            <div class="compare-results">
+              <h4>Why A makes more</h4>
+              <ul id="compareWhyA"></ul>
+              <h4>Why B makes less</h4>
+              <ul id="compareWhyB"></ul>
+              <h4>PPV recommendations for B</h4>
+              <ul id="comparePpv"></ul>
+              <h4>Bait recommendations for B</h4>
+              <ul id="compareBaits"></ul>
+            </div>
+          </div>
+          <div class="insights">
+            <h3>Insights</h3>
+            <ul id="insightList"></ul>
+          </div>
+        </aside>
+      </section>
+
+      <section class="panel tab-panel" id="ppvDayTab">
+        <div class="ppv-panel">
+          <h3>PPV of the day</h3>
+          <div class="ppv-columns">
+            <div>
+              <h4>Ass PPV</h4>
+              <ul id="ppvAssList"></ul>
+            </div>
+            <div>
+              <h4>Tits PPV</h4>
+              <ul id="ppvTitsList"></ul>
+            </div>
+            <div>
+              <h4>Best overall baits</h4>
+              <ul id="ppvOverallList"></ul>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
