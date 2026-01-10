@@ -28,7 +28,7 @@ export const Route = createFileRoute("/")({
 	component: App,
 });
 
-const ADMIN_PASSWORD = "SDJ1238XXZ";
+const ADMIN_PASSWORD = "K7M2X9Q8LP";
 const ADMIN_EMAIL = "admin@platform.com";
 const DEFAULT_ROLE = "recruit";
 const PAYROLL_API_BASE = import.meta.env.VITE_PAYROLL_API_BASE || "http://localhost:5000";
@@ -2731,13 +2731,9 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 						name: "Admin",
 						email: ADMIN_EMAIL,
 						is_admin: true,
-<<<<<<< HEAD
-						password: "asdce123xz",
-=======
 						is_approved: true,
 						role: "admin",
 						password: null,
->>>>>>> 6e21cc9 (Add payroll integration, approvals, and admin UI)
 					} as UsersModel,
 				]);
 			}
@@ -3026,13 +3022,6 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 							>
 								Back to User Login
 							</Button>
-<<<<<<< HEAD
-
-							<p className="text-sm text-slate-500 text-center">
-								Ping!
-							</p>
-=======
->>>>>>> 6e21cc9 (Add payroll integration, approvals, and admin UI)
 						</>
 					)}
 				</CardContent>
