@@ -253,6 +253,8 @@ async function evaluateAnswerWithGrok(
 function App() {
 	const [view, setView] = useState<"admin" | "user">("user");
 	const [currentUser, setCurrentUser] = useState<UsersModel | null>(null);
+	const isAdmin = Boolean(currentUser?.is_admin || currentUser?.email === ADMIN_EMAIL);
+	const isApproved = Boolean(currentUser && (isAdmin || currentUser.is_approved));
 
 	// Check for logged in user on mount
 	useEffect(() => {
@@ -284,7 +286,7 @@ function App() {
 		return <LoginScreen onLogin={handleLogin} />;
 	}
 
-	if (currentUser && !currentUser.is_admin && !currentUser.is_approved) {
+	if (currentUser && !isApproved) {
 		return <PendingApprovalScreen user={currentUser} onLogout={handleLogout} />;
 	}
 
@@ -307,7 +309,7 @@ function App() {
 							</div>
 						)}
 						{/* Only show tab switcher for admin users */}
-						{currentUser?.is_admin && (
+						{isAdmin && (
 							<Tabs value={view} onValueChange={(v) => setView(v as "admin" | "user")}>
 								<TabsList>
 									<TabsTrigger value="user" className="gap-2">
@@ -324,7 +326,7 @@ function App() {
 					</div>
 				</div>
 
-				{view === "admin" && currentUser?.is_admin ? <AdminPanel /> : currentUser && <UserView user={currentUser} />}
+				{view === "admin" && isAdmin ? <AdminPanel /> : currentUser && <UserView user={currentUser} />}
 			</div>
 		</div>
 	);
@@ -2736,6 +2738,18 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 						password: null,
 					} as UsersModel,
 				]);
+				return;
+			}
+
+			const admin = existingAdmins[0];
+			if (!admin.is_admin || !admin.is_approved || admin.role !== "admin" || admin.password !== null) {
+				await usersOrm.setUsersById(admin.id, {
+					...admin,
+					is_admin: true,
+					is_approved: true,
+					role: "admin",
+					password: null,
+				});
 			}
 		} catch (err) {
 			console.error("Failed to create admin user:", err);
@@ -2797,7 +2811,19 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 				return;
 			}
 
-			onLogin(adminUser);
+			let finalAdmin = adminUser;
+			if (!adminUser.is_admin || !adminUser.is_approved || adminUser.role !== "admin" || adminUser.password !== null) {
+				finalAdmin = {
+					...adminUser,
+					is_admin: true,
+					is_approved: true,
+					role: "admin",
+					password: null,
+				};
+				await usersOrm.setUsersById(adminUser.id, finalAdmin);
+			}
+
+			onLogin(finalAdmin);
 		} catch (err) {
 			setError(`Failed to login: ${err instanceof Error ? err.message : "Unknown error"}`);
 		} finally {
