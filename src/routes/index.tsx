@@ -2326,7 +2326,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 							</Button>
 
 							<p className="text-sm text-slate-500 text-center">
-								Default credentials: admin / asdce123xz
+								Ping!
 							</p>
 						</>
 					)}
