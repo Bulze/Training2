@@ -20,13 +20,109 @@ import { CompletionsORM, type CompletionsModel } from "@/sdk/database/orm/orm_co
 import { UsersORM, type UsersModel } from "@/sdk/database/orm/orm_users";
 import { Play, Pause, CheckCircle2, XCircle, Trophy, Settings, Users, Trash2, LogOut, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CreateValue } from "@/sdk/database/orm/client";
-import { DataType, SimpleSelector } from "@/sdk/database/orm/common";
+import { CreateData, CreateValue, DataStoreClient, ParseValue } from "@/sdk/database/orm/client";
+import { DataType, SimpleSelector, type Value } from "@/sdk/database/orm/common";
 import Player from "@vimeo/player";
 
 export const Route = createFileRoute("/")({
 	component: App,
 });
+
+const ADMIN_PASSWORD = "SDJ1238XXZ";
+const ADMIN_EMAIL = "admin@platform.com";
+const DEFAULT_ROLE = "recruit";
+const PAYROLL_API_BASE = import.meta.env.VITE_PAYROLL_API_BASE || "http://localhost:5000";
+const PAYROLL_STORE = {
+	id: "payroll_snapshot_v1",
+	namespace: "training_app",
+	name: "payroll_snapshot",
+	version: "1",
+	task: "payroll",
+};
+const PAYROLL_KEY = "current";
+
+type PayrollEmployee = {
+	employee: string;
+	sales: number;
+	bonus: number;
+	tips: number;
+	ppv_sales?: number;
+	dm_sales?: number;
+	clocked_hours?: number;
+	scheduled_hours?: number;
+	messages_per_hour?: number;
+	fans_per_hour?: number;
+	response_clock_avg?: number;
+	insights?: string[];
+};
+
+type PayrollSnapshot = {
+	min_date: string;
+	max_date: string;
+	employees: PayrollEmployee[];
+};
+
+const payrollClient = DataStoreClient.getInstance();
+
+const valuesToObject = (values: Value[]) => {
+	const obj: Record<string, unknown> = {};
+	for (const value of values || []) {
+		if (!value.name) continue;
+		obj[value.name] = ParseValue(value, value.type);
+	}
+	return obj;
+};
+
+const buildPayrollIndex = (key: string) => ({
+	fields: ["key"],
+	values: [CreateValue(DataType.string, key, "key")],
+});
+
+const fetchPayrollSnapshot = async () => {
+	const response = await payrollClient.get({
+		...PAYROLL_STORE,
+		index: buildPayrollIndex(PAYROLL_KEY),
+		format: { structured: true },
+	});
+	const structured = response.data?.values?.[0]?.structured || [];
+	if (structured.length === 0) {
+		return { snapshot: null, updatedAt: null };
+	}
+	const record = valuesToObject(structured) as {
+		snapshot?: PayrollSnapshot;
+		updated_at?: string;
+	};
+	return {
+		snapshot: record.snapshot ?? null,
+		updatedAt: record.updated_at ?? null,
+	};
+};
+
+const savePayrollSnapshot = async (snapshot: PayrollSnapshot) => {
+	const updatedAt = new Date().toISOString();
+	const data = CreateData([
+		CreateValue(DataType.string, PAYROLL_KEY, "key"),
+		CreateValue(DataType.object, snapshot, "snapshot"),
+		CreateValue(DataType.string, updatedAt, "updated_at"),
+	]);
+
+	await payrollClient.set({
+		...PAYROLL_STORE,
+		index: buildPayrollIndex(PAYROLL_KEY),
+		data,
+		format: { structured: true },
+	});
+
+	return updatedAt;
+};
+
+const clearPayrollSnapshot = async () => {
+	await payrollClient.delete({
+		...PAYROLL_STORE,
+		index: buildPayrollIndex(PAYROLL_KEY),
+		format: { structured: true },
+	});
+};
 
 // Helper function to extract YouTube video ID from URL
 function getYouTubeVideoId(url: string): string | null {
@@ -188,8 +284,12 @@ function App() {
 		return <LoginScreen onLogin={handleLogin} />;
 	}
 
+	if (currentUser && !currentUser.is_admin && !currentUser.is_approved) {
+		return <PendingApprovalScreen user={currentUser} onLogout={handleLogout} />;
+	}
+
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-slate-950 to-slate-900">
+		<div className="min-h-screen bg-[radial-gradient(circle_at_top,_#111b34_0%,_#0a0f1f_55%)]">
 			<div className="container mx-auto py-8 px-4">
 				<div className="flex justify-between items-center mb-8">
 					<div>
@@ -224,21 +324,70 @@ function App() {
 					</div>
 				</div>
 
-				{view === "admin" && currentUser?.is_admin ? <AdminPanel /> : <UserView userId={currentUser?.id || ""} />}
+				{view === "admin" && currentUser?.is_admin ? <AdminPanel /> : currentUser && <UserView user={currentUser} />}
 			</div>
 		</div>
 	);
 }
 
 function AdminPanel() {
-	const [activeTab, setActiveTab] = useState<"create" | "manage" | "submissions">("create");
+	const [activeTab, setActiveTab] = useState<"management" | "training">("management");
 
 	return (
-		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "create" | "manage" | "submissions")}>
-			<TabsList className="grid w-full grid-cols-3 mb-6">
-				<TabsTrigger value="create">Create New Training</TabsTrigger>
+		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "management" | "training")}>
+			<TabsList className="grid w-full grid-cols-2 mb-6 bg-slate-900 border border-slate-800">
+				<TabsTrigger value="management" className="gap-2">
+					<Users className="w-4 h-4" />
+					Management
+				</TabsTrigger>
+				<TabsTrigger value="training" className="gap-2">
+					<Settings className="w-4 h-4" />
+					Training
+				</TabsTrigger>
+			</TabsList>
+
+			<TabsContent value="management">
+				<ManagementPanel />
+			</TabsContent>
+
+			<TabsContent value="training">
+				<TrainingPanel />
+			</TabsContent>
+		</Tabs>
+	);
+}
+
+function ManagementPanel() {
+	const [activeTab, setActiveTab] = useState<"users" | "payroll">("users");
+
+	return (
+		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "payroll")}>
+			<TabsList className="grid w-full grid-cols-2 mb-6 bg-slate-900 border border-slate-800">
+				<TabsTrigger value="users">User Approvals</TabsTrigger>
+				<TabsTrigger value="payroll">Payroll</TabsTrigger>
+			</TabsList>
+
+			<TabsContent value="users">
+				<UserApprovalsPanel />
+			</TabsContent>
+
+			<TabsContent value="payroll">
+				<PayrollPanel />
+			</TabsContent>
+		</Tabs>
+	);
+}
+
+function TrainingPanel() {
+	const [activeTab, setActiveTab] = useState<"create" | "manage" | "roles" | "submissions">("create");
+
+	return (
+		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "create" | "manage" | "roles" | "submissions")}>
+			<TabsList className="grid w-full grid-cols-4 mb-6 bg-slate-900 border border-slate-800">
+				<TabsTrigger value="create">Create Training</TabsTrigger>
 				<TabsTrigger value="manage">Manage Tests</TabsTrigger>
-				<TabsTrigger value="submissions">All Submissions</TabsTrigger>
+				<TabsTrigger value="roles">Roles & Inflow</TabsTrigger>
+				<TabsTrigger value="submissions">Submissions</TabsTrigger>
 			</TabsList>
 
 			<TabsContent value="create">
@@ -247,6 +396,10 @@ function AdminPanel() {
 
 			<TabsContent value="manage">
 				<ManageTestsPanel />
+			</TabsContent>
+
+			<TabsContent value="roles">
+				<TrainingRolesPanel />
 			</TabsContent>
 
 			<TabsContent value="submissions">
@@ -822,6 +975,324 @@ function ManageTestsPanel() {
 	);
 }
 
+function UserApprovalsPanel() {
+	const usersOrm = UsersORM.getInstance();
+	const queryClient = useQueryClient();
+
+	const { data: users = [] } = useQuery({
+		queryKey: ["allUsers"],
+		queryFn: () => usersOrm.getAllUsers(),
+	});
+
+	const updateUser = useMutation({
+		mutationFn: async (user: UsersModel) => {
+			await usersOrm.setUsersById(user.id, user);
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["allUsers"] });
+		},
+	});
+
+	const pending = users.filter((user) => !user.is_admin && !user.is_approved);
+	const approved = users.filter((user) => !user.is_admin && user.is_approved);
+
+	return (
+		<div className="space-y-6">
+			<Card className="bg-slate-900 border-slate-800">
+				<CardHeader>
+					<CardTitle className="text-slate-100">Pending Approvals ({pending.length})</CardTitle>
+					<CardDescription className="text-slate-400">Approve or reject new users</CardDescription>
+				</CardHeader>
+				<CardContent className="space-y-4">
+					{pending.map((user) => (
+						<div key={user.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-lg border border-slate-800 bg-slate-800/40">
+							<div>
+								<p className="text-slate-100 font-medium">{user.name}</p>
+								<p className="text-sm text-slate-400">{user.email}</p>
+								<p className="text-xs text-slate-500">
+									Discord: {user.discord_username || "—"} ({user.discord_nickname || "—"})
+								</p>
+							</div>
+							<div className="flex gap-2">
+								<Button
+									onClick={() => updateUser.mutate({ ...user, is_approved: true })}
+									disabled={updateUser.isPending}
+									className="bg-emerald-600 hover:bg-emerald-700"
+								>
+									Approve
+								</Button>
+								<Button
+									variant="outline"
+									onClick={() => updateUser.mutate({ ...user, is_approved: false })}
+									disabled={updateUser.isPending}
+								>
+									Disapprove
+								</Button>
+							</div>
+						</div>
+					))}
+					{pending.length === 0 && (
+						<p className="text-center text-slate-500 py-6">No pending users</p>
+					)}
+				</CardContent>
+			</Card>
+
+			<Card className="bg-slate-900 border-slate-800">
+				<CardHeader>
+					<CardTitle className="text-slate-100">Approved Users ({approved.length})</CardTitle>
+					<CardDescription className="text-slate-400">Manage approved access</CardDescription>
+				</CardHeader>
+				<CardContent className="space-y-4">
+					{approved.map((user) => (
+						<div key={user.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-lg border border-slate-800 bg-slate-800/40">
+							<div>
+								<p className="text-slate-100 font-medium">{user.name}</p>
+								<p className="text-sm text-slate-400">{user.email}</p>
+								<p className="text-xs text-slate-500">
+									Role: {user.role || DEFAULT_ROLE} · Inflow: {user.inflow_username || "—"}
+								</p>
+							</div>
+							<div className="flex gap-2">
+								<Button
+									variant="outline"
+									onClick={() => updateUser.mutate({ ...user, is_approved: false })}
+									disabled={updateUser.isPending}
+								>
+									Disable Access
+								</Button>
+							</div>
+						</div>
+					))}
+					{approved.length === 0 && (
+						<p className="text-center text-slate-500 py-6">No approved users yet</p>
+					)}
+				</CardContent>
+			</Card>
+		</div>
+	);
+}
+
+function PayrollPanel() {
+	const [salesFile, setSalesFile] = useState<File | null>(null);
+	const [chatFile, setChatFile] = useState<File | null>(null);
+	const [dateFrom, setDateFrom] = useState("");
+	const [dateTo, setDateTo] = useState("");
+	const [aiEnabled, setAiEnabled] = useState(false);
+	const [status, setStatus] = useState<string | null>(null);
+	const [snapshot, setSnapshot] = useState<PayrollSnapshot | null>(null);
+
+	useEffect(() => {
+		const raw = localStorage.getItem("payroll_snapshot");
+		if (raw) {
+			try {
+				setSnapshot(JSON.parse(raw) as PayrollSnapshot);
+			} catch {
+				setSnapshot(null);
+			}
+		}
+	}, []);
+
+	const handleAnalyze = async () => {
+		if (!salesFile) {
+			setStatus("Please select a payroll Excel file.");
+			return;
+		}
+
+		const formData = new FormData();
+		formData.append("file", salesFile);
+		if (chatFile) {
+			formData.append("chat_file", chatFile);
+		}
+		if (dateFrom) formData.append("date_from", dateFrom);
+		if (dateTo) formData.append("date_to", dateTo);
+		formData.append("ai_enabled", aiEnabled ? "true" : "false");
+
+		setStatus("Analyzing payroll...");
+
+		try {
+			const response = await fetch(`${PAYROLL_API_BASE}/api/analyze`, {
+				method: "POST",
+				body: formData,
+			});
+			const data = (await response.json()) as PayrollSnapshot & { error?: string };
+			if (!response.ok) {
+				setStatus(data.error || "Payroll analysis failed.");
+				return;
+			}
+			localStorage.setItem("payroll_snapshot", JSON.stringify(data));
+			localStorage.setItem("payroll_snapshot_updated", new Date().toLocaleString());
+			setSnapshot(data);
+			setStatus(`Payroll loaded for ${data.employees.length} employees.`);
+		} catch (error) {
+			setStatus(`Payroll request failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+		}
+	};
+
+	const clearSnapshot = () => {
+		localStorage.removeItem("payroll_snapshot");
+		localStorage.removeItem("payroll_snapshot_updated");
+		setSnapshot(null);
+		setStatus("Stored payroll cleared.");
+	};
+
+	return (
+		<Card className="bg-slate-900 border-slate-800">
+			<CardHeader>
+				<CardTitle className="text-slate-100">Payroll Upload</CardTitle>
+				<CardDescription className="text-slate-400">
+					Load payroll from the Payroll app API and share results with chatter dashboards
+				</CardDescription>
+			</CardHeader>
+			<CardContent className="space-y-6">
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div className="space-y-2">
+						<Label>Sales Excel</Label>
+						<Input
+							type="file"
+							accept=".xlsx,.xlsm,.xltx,.xltm"
+							onChange={(e) => setSalesFile(e.target.files?.[0] || null)}
+						/>
+					</div>
+					<div className="space-y-2">
+						<Label>Chats Excel (optional)</Label>
+						<Input
+							type="file"
+							accept=".xlsx,.xlsm,.xltx,.xltm"
+							onChange={(e) => setChatFile(e.target.files?.[0] || null)}
+						/>
+					</div>
+					<div className="space-y-2">
+						<Label>Date From</Label>
+						<Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+					</div>
+					<div className="space-y-2">
+						<Label>Date To</Label>
+						<Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+					</div>
+				</div>
+
+				<div className="flex items-center gap-4">
+					<Label className="text-slate-300">AI Insights</Label>
+					<Button
+						variant={aiEnabled ? "default" : "outline"}
+						size="sm"
+						onClick={() => setAiEnabled((prev) => !prev)}
+					>
+						{aiEnabled ? "Enabled" : "Disabled"}
+					</Button>
+				</div>
+
+				<div className="flex flex-col md:flex-row gap-3">
+					<Button onClick={handleAnalyze} className="bg-emerald-600 hover:bg-emerald-700">
+						Load Payroll
+					</Button>
+					<Button variant="outline" onClick={clearSnapshot}>
+						Clear Stored Payroll
+					</Button>
+				</div>
+
+				{status && (
+					<Alert className="bg-slate-800 border-slate-700">
+						<AlertDescription className="text-slate-200">{status}</AlertDescription>
+					</Alert>
+				)}
+
+				{snapshot && (
+					<div className="text-sm text-slate-400">
+						Loaded range: {snapshot.min_date} → {snapshot.max_date} · Employees: {snapshot.employees.length}
+					</div>
+				)}
+			</CardContent>
+		</Card>
+	);
+}
+
+function TrainingRolesPanel() {
+	const usersOrm = UsersORM.getInstance();
+	const queryClient = useQueryClient();
+	const [edits, setEdits] = useState<Record<string, Partial<UsersModel>>>({});
+
+	const { data: users = [] } = useQuery({
+		queryKey: ["allUsers"],
+		queryFn: () => usersOrm.getAllUsers(),
+	});
+
+	const updateUser = useMutation({
+		mutationFn: async (user: UsersModel) => {
+			await usersOrm.setUsersById(user.id, user);
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["allUsers"] });
+		},
+	});
+
+	const updateEdit = (userId: string, patch: Partial<UsersModel>) => {
+		setEdits((prev) => ({
+			...prev,
+			[userId]: { ...prev[userId], ...patch },
+		}));
+	};
+
+	const trainingUsers = users.filter((user) => !user.is_admin);
+
+	return (
+		<Card className="bg-slate-900 border-slate-800">
+			<CardHeader>
+				<CardTitle className="text-slate-100">Roles & Inflow Mapping</CardTitle>
+				<CardDescription className="text-slate-400">
+					Assign roles and inflow usernames for payroll dashboards
+				</CardDescription>
+			</CardHeader>
+			<CardContent className="space-y-4">
+				{trainingUsers.map((user) => {
+					const draft = edits[user.id] || {};
+					const role = (draft.role ?? user.role ?? DEFAULT_ROLE) as string;
+					const inflow = (draft.inflow_username ?? user.inflow_username ?? "") as string;
+					return (
+						<div key={user.id} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center p-4 border border-slate-800 rounded-lg bg-slate-800/40">
+							<div>
+								<p className="text-slate-100 font-medium">{user.name}</p>
+								<p className="text-xs text-slate-400">{user.email}</p>
+							</div>
+							<div className="space-y-2">
+								<Label>Role</Label>
+								<select
+									className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+									value={role}
+									onChange={(e) => updateEdit(user.id, { role: e.target.value })}
+								>
+									<option value="recruit">Recruit</option>
+									<option value="chatter">Chatter</option>
+								</select>
+							</div>
+							<div className="space-y-2">
+								<Label>Inflow Username</Label>
+								<Input
+									value={inflow}
+									onChange={(e) => updateEdit(user.id, { inflow_username: e.target.value })}
+									placeholder="inflow username"
+								/>
+							</div>
+							<div className="flex justify-end">
+								<Button
+									onClick={() => updateUser.mutate({ ...user, ...draft })}
+									disabled={updateUser.isPending}
+								>
+									Save
+								</Button>
+							</div>
+						</div>
+					);
+				})}
+
+				{trainingUsers.length === 0 && (
+					<p className="text-center text-slate-500 py-6">No users available</p>
+				)}
+			</CardContent>
+		</Card>
+	);
+}
+
 function AllSubmissionsPanel() {
 	const completionsOrm = CompletionsORM.getInstance();
 	const quizAttemptsOrm = QuizAttemptsORM.getInstance();
@@ -949,7 +1420,8 @@ function AllSubmissionsPanel() {
 	);
 }
 
-function UserView({ userId }: { userId: string }) {
+function UserView({ user }: { user: UsersModel }) {
+	const userId = user.id;
 	const [selectedVideo, setSelectedVideo] = useState<VideosModel | null>(null);
 	const [showQuiz, setShowQuiz] = useState(false);
 	const [completionResult, setCompletionResult] = useState<CompletionsModel | null>(null);
@@ -1019,6 +1491,9 @@ function UserView({ userId }: { userId: string }) {
 
 	return (
 		<div className="space-y-6">
+			{user.role === "chatter" && (
+				<ChatterDashboard user={user} />
+			)}
 			<Card className="bg-slate-900 border-slate-800">
 				<CardHeader>
 					<CardTitle className="text-slate-100">Available Training Videos</CardTitle>
@@ -1080,6 +1555,130 @@ function UserView({ userId }: { userId: string }) {
 				</CardContent>
 			</Card>
 		</div>
+	);
+}
+
+function ChatterDashboard({ user }: { user: UsersModel }) {
+	const [snapshot, setSnapshot] = useState<PayrollSnapshot | null>(null);
+	const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
+	const loadSnapshot = () => {
+		const raw = localStorage.getItem("payroll_snapshot");
+		const updatedAt = localStorage.getItem("payroll_snapshot_updated");
+		setLastUpdated(updatedAt);
+		if (!raw) {
+			setSnapshot(null);
+			return;
+		}
+		try {
+			setSnapshot(JSON.parse(raw) as PayrollSnapshot);
+		} catch {
+			setSnapshot(null);
+		}
+	};
+
+	useEffect(() => {
+		loadSnapshot();
+	}, []);
+
+	const inflow = user.inflow_username?.trim();
+	const employee = inflow && snapshot
+		? snapshot.employees.find((emp) => emp.employee.toLowerCase() === inflow.toLowerCase())
+		: null;
+
+	return (
+		<Card className="bg-slate-900 border-slate-800">
+			<CardHeader>
+				<div className="flex justify-between items-start">
+					<div>
+						<CardTitle className="text-slate-100">Chatter Dashboard</CardTitle>
+						<CardDescription className="text-slate-400">
+							Your payroll stats from the latest admin upload
+						</CardDescription>
+					</div>
+					<Button variant="outline" size="sm" onClick={loadSnapshot}>
+						Refresh
+					</Button>
+				</div>
+			</CardHeader>
+			<CardContent className="space-y-4">
+				{!inflow && (
+					<Alert className="bg-amber-50 border-amber-200">
+						<AlertDescription className="text-amber-800">
+							Your inflow username is not set yet. Ask an admin to update your profile.
+						</AlertDescription>
+					</Alert>
+				)}
+
+				{inflow && !snapshot && (
+					<Alert className="bg-blue-50 border-blue-200">
+						<AlertDescription className="text-blue-800">
+							No payroll data is loaded yet. Check back after the admin uploads payroll.
+						</AlertDescription>
+					</Alert>
+				)}
+
+				{inflow && snapshot && !employee && (
+					<Alert className="bg-amber-50 border-amber-200">
+						<AlertDescription className="text-amber-800">
+							No payroll match found for inflow username "{inflow}". Ask an admin to verify it.
+						</AlertDescription>
+					</Alert>
+				)}
+
+				{employee && (
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<Card className="bg-slate-800 border-slate-700">
+							<CardHeader>
+								<CardTitle className="text-sm text-slate-200">Sales</CardTitle>
+							</CardHeader>
+							<CardContent className="text-2xl font-semibold text-emerald-400">
+								${employee.sales.toFixed(2)}
+							</CardContent>
+						</Card>
+						<Card className="bg-slate-800 border-slate-700">
+							<CardHeader>
+								<CardTitle className="text-sm text-slate-200">Bonus</CardTitle>
+							</CardHeader>
+							<CardContent className="text-2xl font-semibold text-sky-400">
+								${employee.bonus.toFixed(2)}
+							</CardContent>
+						</Card>
+						<Card className="bg-slate-800 border-slate-700">
+							<CardHeader>
+								<CardTitle className="text-sm text-slate-200">Tips</CardTitle>
+							</CardHeader>
+							<CardContent className="text-2xl font-semibold text-pink-400">
+								${employee.tips.toFixed(2)}
+							</CardContent>
+						</Card>
+						<Card className="bg-slate-800 border-slate-700">
+							<CardHeader>
+								<CardTitle className="text-sm text-slate-200">Clocked Hours</CardTitle>
+							</CardHeader>
+							<CardContent className="text-2xl font-semibold text-slate-200">
+								{employee.clocked_hours?.toFixed(1) ?? "—"}
+							</CardContent>
+						</Card>
+					</div>
+				)}
+
+				{employee?.insights && employee.insights.length > 0 && (
+					<div className="space-y-2">
+						<Label className="text-slate-300">Insights</Label>
+						<ul className="list-disc list-inside text-slate-300 space-y-1">
+							{employee.insights.map((insight, idx) => (
+								<li key={idx}>{insight}</li>
+							))}
+						</ul>
+					</div>
+				)}
+
+				{lastUpdated && (
+					<p className="text-xs text-slate-500">Last updated: {lastUpdated}</p>
+				)}
+			</CardContent>
+		</Card>
 	);
 }
 
@@ -2073,9 +2672,35 @@ function CompletionScreen({ completion, onReset }: { completion: CompletionsMode
 	);
 }
 
+function PendingApprovalScreen({ user, onLogout }: { user: UsersModel; onLogout: () => void }) {
+	return (
+		<div className="min-h-screen bg-[radial-gradient(circle_at_top,_#111b34_0%,_#0a0f1f_55%)] flex items-center justify-center px-4">
+			<Card className="w-full max-w-lg bg-slate-900 border-slate-800">
+				<CardHeader className="text-center">
+					<CardTitle className="text-2xl text-slate-100">Approval Required</CardTitle>
+					<CardDescription className="text-slate-400">
+						Your account is waiting for admin approval.
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="space-y-4 text-center">
+					<p className="text-slate-300">
+						Hi {user.name}, your account has been created. Please wait for admin approval.
+					</p>
+					<Button variant="outline" onClick={onLogout}>
+						Logout
+					</Button>
+				</CardContent>
+			</Card>
+		</div>
+	);
+}
+
 function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 	const [name, setName] = useState("");
 	const [email, setEmail] = useState("");
+	const [discordUsername, setDiscordUsername] = useState("");
+	const [discordNickname, setDiscordNickname] = useState("");
+	const [password, setPassword] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [showAdminLogin, setShowAdminLogin] = useState(false);
@@ -2091,7 +2716,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 					{
 						symbol: SimpleSelector.equal,
 						field: "email",
-						value: CreateValue(DataType.string, "admin@platform.com"),
+						value: CreateValue(DataType.string, ADMIN_EMAIL),
 					},
 				],
 				multiples: [],
@@ -2104,9 +2729,15 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 				await usersOrm.insertUsers([
 					{
 						name: "Admin",
-						email: "admin@platform.com",
+						email: ADMIN_EMAIL,
 						is_admin: true,
+<<<<<<< HEAD
 						password: "asdce123xz",
+=======
+						is_approved: true,
+						role: "admin",
+						password: null,
+>>>>>>> 6e21cc9 (Add payroll integration, approvals, and admin UI)
 					} as UsersModel,
 				]);
 			}
@@ -2126,6 +2757,11 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 			return;
 		}
 
+		if (adminPassword !== ADMIN_PASSWORD) {
+			setError("Invalid admin credentials");
+			return;
+		}
+
 		setIsLoading(true);
 		setError(null);
 
@@ -2135,7 +2771,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 					{
 						symbol: SimpleSelector.equal,
 						field: "email",
-						value: CreateValue(DataType.string, "admin@platform.com"),
+						value: CreateValue(DataType.string, ADMIN_EMAIL),
 					},
 				],
 				multiples: [],
@@ -2143,12 +2779,29 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 				unwinds: [],
 			});
 
-			if (admins.length === 0 || admins[0].password !== adminPassword) {
-				setError("Invalid admin credentials");
+			if (admins.length === 0) {
+				await ensureAdminExists();
+			}
+
+			const [adminUser] = await usersOrm.listUsers({
+				simples: [
+					{
+						symbol: SimpleSelector.equal,
+						field: "email",
+						value: CreateValue(DataType.string, ADMIN_EMAIL),
+					},
+				],
+				multiples: [],
+				groups: [],
+				unwinds: [],
+			});
+
+			if (!adminUser) {
+				setError("Admin account not found");
 				return;
 			}
 
-			onLogin(admins[0]);
+			onLogin(adminUser);
 		} catch (err) {
 			setError(`Failed to login: ${err instanceof Error ? err.message : "Unknown error"}`);
 		} finally {
@@ -2157,8 +2810,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 	};
 
 	const handleLogin = async () => {
-		if (!name.trim() || !email.trim()) {
-			setError("Please enter both name and email");
+		if (!name.trim() || !email.trim() || !discordUsername.trim() || !discordNickname.trim() || !password.trim()) {
+			setError("Please fill in all fields");
 			return;
 		}
 
@@ -2192,12 +2845,23 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 			if (existingUsers.length > 0) {
 				// User exists, use existing account
 				user = existingUsers[0];
+				if (user.password && user.password !== password.trim()) {
+					setError("Invalid email or password");
+					return;
+				}
 			} else {
 				// Create new user
 				const [newUser] = await usersOrm.insertUsers([
 					{
 						name: name.trim(),
 						email: email.toLowerCase().trim(),
+						is_admin: false,
+						is_approved: false,
+						role: DEFAULT_ROLE,
+						discord_username: discordUsername.trim(),
+						discord_nickname: discordNickname.trim(),
+						inflow_username: "",
+						password: password.trim(),
 					} as UsersModel,
 				]);
 				user = newUser;
@@ -2246,6 +2910,30 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 							</div>
 
 							<div className="space-y-2">
+								<Label htmlFor="discordUsername">Discord Username</Label>
+								<Input
+									id="discordUsername"
+									value={discordUsername}
+									onChange={(e) => setDiscordUsername(e.target.value)}
+									placeholder="discord_user"
+									disabled={isLoading}
+									onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+								/>
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="discordNickname">Discord Nickname</Label>
+								<Input
+									id="discordNickname"
+									value={discordNickname}
+									onChange={(e) => setDiscordNickname(e.target.value)}
+									placeholder="Your Discord nickname"
+									disabled={isLoading}
+									onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+								/>
+							</div>
+
+							<div className="space-y-2">
 								<Label htmlFor="email">Email Address</Label>
 								<Input
 									id="email"
@@ -2253,6 +2941,19 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 									value={email}
 									onChange={(e) => setEmail(e.target.value)}
 									placeholder="john@example.com"
+									disabled={isLoading}
+									onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+								/>
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="password">Password</Label>
+								<Input
+									id="password"
+									type="password"
+									value={password}
+									onChange={(e) => setPassword(e.target.value)}
+									placeholder="Create a password"
 									disabled={isLoading}
 									onKeyDown={(e) => e.key === "Enter" && handleLogin()}
 								/>
@@ -2275,6 +2976,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 								onClick={() => {
 									setShowAdminLogin(true);
 									setError(null);
+									setAdminPassword("");
 								}}
 								variant="outline"
 								className="w-full"
@@ -2324,10 +3026,13 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 							>
 								Back to User Login
 							</Button>
+<<<<<<< HEAD
 
 							<p className="text-sm text-slate-500 text-center">
 								Ping!
 							</p>
+=======
+>>>>>>> 6e21cc9 (Add payroll integration, approvals, and admin UI)
 						</>
 					)}
 				</CardContent>

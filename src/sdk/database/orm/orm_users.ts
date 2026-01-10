@@ -35,6 +35,11 @@ export interface UsersModel {
   name: string;
   email: string;
   is_admin: boolean;
+  is_approved?: boolean;
+  role?: string | null;
+  discord_username?: string | null;
+  discord_nickname?: string | null;
+  inflow_username?: string | null;
   password?: string | null;
 }
 
@@ -555,6 +560,11 @@ function UsersModelToValues(data: UsersModel): Value[] {
     { key: 'name', type: DataType.string, defaultValue: '' },
     { key: 'email', type: DataType.string, defaultValue: '' },
     { key: 'is_admin', type: DataType.boolean, defaultValue: false },
+    { key: 'is_approved', type: DataType.boolean, defaultValue: false },
+    { key: 'role', type: DataType.string, defaultValue: null },
+    { key: 'discord_username', type: DataType.string, defaultValue: null },
+    { key: 'discord_nickname', type: DataType.string, defaultValue: null },
+    { key: 'inflow_username', type: DataType.string, defaultValue: null },
     { key: 'password', type: DataType.string, defaultValue: null },
   ];
 
@@ -597,6 +607,21 @@ function UsersModelFromValues(values: Value[]): UsersModel {
         break;
       case 'is_admin':
         data.is_admin = ParseValue(value, DataType.boolean) as boolean;
+        break;
+      case 'is_approved':
+        data.is_approved = ParseValue(value, DataType.boolean) as boolean;
+        break;
+      case 'role':
+        data.role = ParseValue(value, DataType.string) as string | null;
+        break;
+      case 'discord_username':
+        data.discord_username = ParseValue(value, DataType.string) as string | null;
+        break;
+      case 'discord_nickname':
+        data.discord_nickname = ParseValue(value, DataType.string) as string | null;
+        break;
+      case 'inflow_username':
+        data.inflow_username = ParseValue(value, DataType.string) as string | null;
         break;
       case 'password':
         data.password = ParseValue(value, DataType.string) as string | null;
