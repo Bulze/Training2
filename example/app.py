@@ -85,6 +85,19 @@ def build_grok_url():
     return f"{base}/v1/chat/completions"
 
 
+def parse_json_object(text):
+    if not text:
+        return None
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    try:
+        return json.loads(text[start : end + 1])
+    except Exception:
+        return None
+
+
 def parse_date(value):
     if isinstance(value, datetime):
         return value.date()
@@ -941,6 +954,55 @@ def ai_test():
         return jsonify({"ok": False, "error": "Unexpected response"}), 400
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/api/employee-feedback", methods=["POST"])
+def employee_feedback():
+    if not GROK_API_KEY:
+        return jsonify({"error": "Missing GROK_API_KEY"}), 400
+
+    payload = request.get_json(silent=True) or {}
+    employee = payload.get("employee") or payload.get("user") or payload.get("chatter")
+    if not employee:
+        return jsonify({"error": "Missing employee"}), 400
+
+    prompt = f"""You are a performance coach for an OnlyFans chatter team.
+Given the employee stats below, produce coaching feedback.
+Return ONLY valid JSON with keys:
+- strengths: string[] (max 4)
+- improvements: string[] (max 4)
+- next_steps: string[] (max 5)
+
+Employee stats JSON:
+{json.dumps(employee, ensure_ascii=False)}
+"""
+
+    grok_payload = {
+        "model": GROK_MODEL,
+        "messages": [
+            {"role": "system", "content": "Return only valid JSON. No extra text."},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.2,
+        "max_tokens": 350,
+    }
+
+    try:
+        response = requests.post(
+            build_grok_url(),
+            headers={"Authorization": f"Bearer {GROK_API_KEY}"},
+            json=grok_payload,
+            timeout=25,
+        )
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+        parsed = parse_json_object(content) or {}
+        strengths = parsed.get("strengths") if isinstance(parsed.get("strengths"), list) else []
+        improvements = parsed.get("improvements") if isinstance(parsed.get("improvements"), list) else []
+        next_steps = parsed.get("next_steps") if isinstance(parsed.get("next_steps"), list) else []
+        return jsonify({"strengths": strengths, "improvements": improvements, "next_steps": next_steps})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @app.route("/api/compare", methods=["POST"])

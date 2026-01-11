@@ -107,6 +107,13 @@ type PayrollSnapshot = {
 	ppv_day?: PayrollPpvDay;
 };
 
+type PayrollEmployeeFeedback = {
+	strengths?: string[];
+	improvements?: string[];
+	next_steps?: string[];
+	error?: string;
+};
+
 const payrollClient = DataStoreClient.getInstance();
 
 const valuesToObject = (values: Value[]) => {
@@ -1150,6 +1157,8 @@ function PayrollPanel() {
 	const [activeTab, setActiveTab] = useState<"detail" | "ppv">("detail");
 	const [compareA, setCompareA] = useState("");
 	const [compareB, setCompareB] = useState("");
+	const [employeeSearch, setEmployeeSearch] = useState("");
+	const [showAllEmployees, setShowAllEmployees] = useState(false);
 	const [compareSummary, setCompareSummary] = useState<{
 		why_a_wins?: string[];
 		why_b_lags?: string[];
@@ -1158,6 +1167,9 @@ function PayrollPanel() {
 	} | null>(null);
 	const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 	const [aiStatus, setAiStatus] = useState<string | null>(null);
+	const [isAnalyzing, setIsAnalyzing] = useState(false);
+	const [employeeFeedback, setEmployeeFeedback] = useState<Record<string, PayrollEmployeeFeedback>>({});
+	const [employeeFeedbackLoading, setEmployeeFeedbackLoading] = useState(false);
 
 	const formatApiErrorMessage = (label: string, error: unknown) => {
 		const message =
@@ -1250,6 +1262,17 @@ function PayrollPanel() {
 		return [...computedEmployees].sort((a, b) => (b.totalPay ?? 0) - (a.totalPay ?? 0));
 	}, [computedEmployees]);
 
+	const filteredEmployees = useMemo(() => {
+		const query = employeeSearch.trim().toLowerCase();
+		if (!query) return sortedEmployees;
+		return sortedEmployees.filter((emp) => emp.employee.toLowerCase().includes(query));
+	}, [sortedEmployees, employeeSearch]);
+
+	const visibleEmployees = useMemo(() => {
+		if (showAllEmployees) return filteredEmployees;
+		return filteredEmployees.slice(0, 7);
+	}, [filteredEmployees, showAllEmployees]);
+
 	const selectedEmployee = useMemo(() => {
 		if (!selectedEmployeeName) return null;
 		return computedEmployees.find((emp) => emp.employee === selectedEmployeeName) || null;
@@ -1301,6 +1324,7 @@ function PayrollPanel() {
 	};
 
 	const handleAnalyze = async () => {
+		if (isAnalyzing) return;
 		if (!salesFile) {
 			setStatus("Select a sales Excel file.");
 			return;
@@ -1315,12 +1339,26 @@ function PayrollPanel() {
 		if (dateTo) formData.append("date_to", dateTo);
 		formData.append("ai_enabled", aiEnabled ? "true" : "false");
 
-		setStatus(aiEnabled ? "Loading with AI enabled (may take longer)..." : "Loading...");
+		const controller = new AbortController();
+		const abortTimer = window.setTimeout(() => controller.abort(), 5 * 60_000);
+		const startMs = Date.now();
+		const statusTimer = window.setInterval(() => {
+			const elapsed = Math.round((Date.now() - startMs) / 1000);
+			setStatus(
+				aiEnabled
+					? `Loading with AI enabled… (${elapsed}s)`
+					: `Loading… (${elapsed}s)`,
+			);
+		}, 5000);
+
+		setIsAnalyzing(true);
+		setStatus(aiEnabled ? "Loading with AI enabled…" : "Loading…");
 
 		try {
 			const response = await fetch(`${PAYROLL_API_BASE}/api/analyze`, {
 				method: "POST",
 				body: formData,
+				signal: controller.signal,
 			});
 
 			const parsed = await readJsonResponse<PayrollSnapshot & { error?: string }>(response);
@@ -1352,6 +1390,9 @@ function PayrollPanel() {
 			setPpvDay(data.ppv_day || {});
 			setAiStatus(data.ai_status || null);
 			setCompareSummary(null);
+			setEmployeeFeedback({});
+			setEmployeeSearch("");
+			setShowAllEmployees(false);
 			setSelectedEmployeeName(null);
 			setActiveTab("detail");
 
@@ -1375,6 +1416,10 @@ function PayrollPanel() {
 			}
 		} catch (error) {
 			setStatus(formatApiErrorMessage("Request failed", error));
+		} finally {
+			window.clearTimeout(abortTimer);
+			window.clearInterval(statusTimer);
+			setIsAnalyzing(false);
 		}
 	};
 
@@ -1478,9 +1523,56 @@ function PayrollPanel() {
 		setCompareSummary(null);
 		setUpdatedAt(null);
 		setAiStatus(null);
+		setEmployeeFeedback({});
+		setEmployeeSearch("");
+		setShowAllEmployees(false);
 		setStatus("Cleared.");
 		setActiveTab("detail");
 	};
+
+	useEffect(() => {
+		if (!selectedEmployee || !aiEnabled) return;
+		if (employeeFeedback[selectedEmployee.employee]) return;
+
+		let cancelled = false;
+		const run = async () => {
+			setEmployeeFeedbackLoading(true);
+			try {
+				const response = await fetch(`${PAYROLL_API_BASE}/api/employee-feedback`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ employee: selectedEmployee }),
+				});
+				const parsed = await readJsonResponse<PayrollEmployeeFeedback>(response);
+				if (!parsed.ok) {
+					if (cancelled) return;
+					setEmployeeFeedback((prev) => ({
+						...prev,
+						[selectedEmployee.employee]: { error: summarizeText(parsed.text) },
+					}));
+					return;
+				}
+				if (cancelled) return;
+				setEmployeeFeedback((prev) => ({
+					...prev,
+					[selectedEmployee.employee]: parsed.json,
+				}));
+			} catch (error) {
+				if (cancelled) return;
+				setEmployeeFeedback((prev) => ({
+					...prev,
+					[selectedEmployee.employee]: { error: error instanceof Error ? error.message : "Unknown error" },
+				}));
+			} finally {
+				if (!cancelled) setEmployeeFeedbackLoading(false);
+			}
+		};
+
+		run();
+		return () => {
+			cancelled = true;
+		};
+	}, [PAYROLL_API_BASE, aiEnabled, employeeFeedback, selectedEmployee]);
 
 	return (
 		<div className="payroll-app">
@@ -1501,8 +1593,8 @@ function PayrollPanel() {
 							accept=".xlsx,.xlsm,.xltx,.xltm"
 							onChange={(e) => setSalesFile(e.target.files?.[0] || null)}
 						/>
-						<button type="button" className="btn accent" onClick={handleAnalyze}>
-							Load + Calculate
+						<button type="button" className="btn accent" onClick={handleAnalyze} disabled={isAnalyzing}>
+							{isAnalyzing ? "Loading…" : "Load + Calculate"}
 						</button>
 					</div>
 				</div>
@@ -1603,6 +1695,27 @@ function PayrollPanel() {
 
 			<section className={cn("panel grid tab-panel", activeTab === "detail" && "active")}>
 				<div className="table-wrap">
+					<div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+						<div className="flex items-center gap-2">
+							<input
+								type="text"
+								placeholder="Search user…"
+								value={employeeSearch}
+								onChange={(e) => setEmployeeSearch(e.target.value)}
+							/>
+							<span className="text-xs text-slate-400">
+								Showing {visibleEmployees.length}/{filteredEmployees.length}
+							</span>
+						</div>
+						<button
+							type="button"
+							className="btn ghost"
+							onClick={() => setShowAllEmployees((prev) => !prev)}
+							disabled={filteredEmployees.length <= 7}
+						>
+							{showAllEmployees ? "Show top 7" : `Show all users (${filteredEmployees.length})`}
+						</button>
+					</div>
 					<table>
 						<thead>
 							<tr>
@@ -1616,7 +1729,7 @@ function PayrollPanel() {
 							</tr>
 						</thead>
 						<tbody>
-							{sortedEmployees.map((emp) => (
+							{visibleEmployees.map((emp) => (
 								<tr key={emp.employee} onClick={() => setSelectedEmployeeName(emp.employee)}>
 									<td>{emp.employee}</td>
 									<td>{((emp.percent ?? 0) * 100).toFixed(2)}%</td>
@@ -1627,6 +1740,11 @@ function PayrollPanel() {
 									<td>{formatMoney(Number(emp.totalPay ?? 0))}</td>
 								</tr>
 							))}
+							{sortedEmployees.length > 0 && visibleEmployees.length === 0 && (
+								<tr>
+									<td colSpan={7}>No users match your search.</td>
+								</tr>
+							)}
 							{sortedEmployees.length === 0 && (
 								<tr>
 									<td colSpan={7}>No payroll data loaded.</td>
@@ -1805,9 +1923,38 @@ function PayrollPanel() {
 						</div>
 					</div>
 					<div className="insights">
-						<h3>Insights</h3>
+						<h3>AI Feedback</h3>
 						<ul>{renderList(selectedEmployee?.insights)}</ul>
 					</div>
+					{selectedEmployee && (
+						<div className="insights">
+							<h3>AI Coach</h3>
+							{!aiEnabled ? (
+								<p className="text-sm text-slate-400">Enable AI Insights to load coaching feedback.</p>
+							) : employeeFeedbackLoading ? (
+								<p className="text-sm text-slate-400">Loading coach feedback…</p>
+							) : employeeFeedback[selectedEmployee.employee]?.error ? (
+								<p className="text-sm text-rose-300">
+									Coach failed: {employeeFeedback[selectedEmployee.employee]?.error}
+								</p>
+							) : (
+								<div className="space-y-3">
+									<div>
+										<h4>Strengths</h4>
+										<ul>{renderList(employeeFeedback[selectedEmployee.employee]?.strengths)}</ul>
+									</div>
+									<div>
+										<h4>Improvements</h4>
+										<ul>{renderList(employeeFeedback[selectedEmployee.employee]?.improvements)}</ul>
+									</div>
+									<div>
+										<h4>Next steps</h4>
+										<ul>{renderList(employeeFeedback[selectedEmployee.employee]?.next_steps)}</ul>
+									</div>
+								</div>
+							)}
+						</div>
+					)}
 					{updatedAt && (
 						<p className="text-xs text-slate-500">
 							Last updated: {updatedAt} {aiStatus ? `(${aiStatus})` : ""}
