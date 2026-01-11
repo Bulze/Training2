@@ -61,6 +61,11 @@ type PayrollEmployee = {
 	sales: number;
 	bonus: number;
 	tips: number;
+	shifts?: Array<{
+		date: string;
+		sales?: number;
+		bonus?: number;
+	}>;
 	percent?: number;
 	penalty?: number;
 	ppv_sales?: number;
@@ -2403,21 +2408,39 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const totalEarned = sales * percent + bonus - penalty;
 
 	const dailyEarned = useMemo(() => {
-		const daily = employee?.daily_sales || {};
-		const entries = Object.entries(daily)
-			.map(([dateKey, value]) => {
-				const date = (() => {
-					try {
-						return parseISO(dateKey);
-					} catch {
-						return null;
-					}
-				})();
-				return { dateKey, date, earned: Number(value ?? 0) * percent };
-			})
-			.filter((x) => x.date);
-		entries.sort((a, b) => (a.date as Date).getTime() - (b.date as Date).getTime());
-		return entries as Array<{ dateKey: string; date: Date; earned: number }>;
+		const byDate = new Map<string, number>();
+
+		const shifts = employee?.shifts || [];
+		if (shifts.length) {
+			for (const shift of shifts) {
+				const dateKey = String(shift.date || "").slice(0, 10);
+				if (!dateKey) continue;
+				const shiftSales = Number(shift.sales ?? 0);
+				const shiftBonus = Number(shift.bonus ?? 0);
+				const earned = shiftSales * percent + shiftBonus;
+				byDate.set(dateKey, (byDate.get(dateKey) ?? 0) + earned);
+			}
+		} else {
+			const daily = employee?.daily_sales || {};
+			for (const [dateKeyRaw, value] of Object.entries(daily)) {
+				const dateKey = String(dateKeyRaw || "").slice(0, 10);
+				if (!dateKey) continue;
+				byDate.set(dateKey, (byDate.get(dateKey) ?? 0) + Number(value ?? 0) * percent);
+			}
+		}
+
+		const entries = Array.from(byDate.entries()).map(([dateKey, earned]) => {
+			let date: Date | null = null;
+			try {
+				date = parseISO(dateKey);
+			} catch {
+				date = null;
+			}
+			return { dateKey, date, earned };
+		}).filter((x) => x.date) as Array<{ dateKey: string; date: Date; earned: number }>;
+
+		entries.sort((a, b) => a.date.getTime() - b.date.getTime());
+		return entries;
 	}, [employee, percent]);
 
 	useEffect(() => {
