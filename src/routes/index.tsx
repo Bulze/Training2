@@ -32,7 +32,8 @@ export const Route = createFileRoute("/")({
 const ADMIN_PASSWORD = "K7M2X9Q8LP";
 const ADMIN_EMAIL = "admin@platform.com";
 const DEFAULT_ROLE = "recruit";
-const PAYROLL_API_BASE = import.meta.env.VITE_PAYROLL_API_BASE || "http://localhost:5000";
+const PAYROLL_API_BASE =
+	import.meta.env.VITE_PAYROLL_API_BASE || import.meta.env.VITE_API_BASE_PATH || "http://localhost:5000";
 const PAYROLL_STORE = {
 	id: "payroll_snapshot_v1",
 	namespace: "training_app",
@@ -41,6 +42,8 @@ const PAYROLL_STORE = {
 	task: "payroll",
 };
 const PAYROLL_KEY = "current";
+const PAYROLL_API_BASE_CLEAN = PAYROLL_API_BASE.replace(/\/+$/, "");
+const PAYROLL_API_HINT = `Ensure payroll API (${PAYROLL_API_BASE_CLEAN}/api) is running.`;
 
 type PayrollEmployee = {
 	employee: string;
@@ -1157,6 +1160,16 @@ function PayrollPanel() {
 	const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 	const [aiStatus, setAiStatus] = useState<string | null>(null);
 
+	const formatApiErrorMessage = (label: string, error: unknown) => {
+		const message =
+			typeof error === "string"
+				? error
+				: error instanceof Error
+					? error.message
+					: "Unknown error";
+		return `${label}: ${message}. ${PAYROLL_API_HINT}`;
+	};
+
 	useEffect(() => {
 		const raw = localStorage.getItem("payroll_snapshot");
 		if (!raw) return;
@@ -1170,12 +1183,12 @@ function PayrollPanel() {
 			const storedUpdated = localStorage.getItem("payroll_snapshot_updated");
 			if (storedUpdated) setUpdatedAt(storedUpdated);
 			setStatus("Loaded stored payroll.");
-			if (!dateFrom && parsed.min_date) setDateFrom(parsed.min_date);
-			if (!dateTo && parsed.max_date) setDateTo(parsed.max_date);
+			setDateFrom((prev) => prev || parsed.min_date || "");
+			setDateTo((prev) => prev || parsed.max_date || "");
 		} catch {
 			setStatus("Ready");
 		}
-	}, [dateFrom, dateTo]);
+	}, []);
 
 	useEffect(() => {
 		if (!employees.length) {
@@ -1331,7 +1344,7 @@ function PayrollPanel() {
 				setStatus(`Calculated. Employees: ${preparedEmployees.length}.`);
 			}
 		} catch (error) {
-			setStatus(`Request failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+			setStatus(formatApiErrorMessage("Request failed", error));
 		}
 	};
 
@@ -1376,7 +1389,7 @@ function PayrollPanel() {
 			}
 			setStatus("AI test OK.");
 		} catch (error) {
-			setStatus(`AI test failed: ${error instanceof Error ? error.message : "unknown error"}`);
+			setStatus(formatApiErrorMessage("AI test failed", error));
 		}
 	};
 
@@ -1408,7 +1421,7 @@ function PayrollPanel() {
 			setCompareSummary(data.summary || {});
 			setStatus("Compare complete.");
 		} catch (error) {
-			setStatus(`Compare failed: ${error instanceof Error ? error.message : "unknown error"}`);
+			setStatus(formatApiErrorMessage("Compare failed", error));
 		}
 	};
 

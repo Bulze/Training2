@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from flask import Flask, jsonify, render_template, request
+from flask_cors import CORS
 from openpyxl import load_workbook
 from dotenv import load_dotenv
 
@@ -47,6 +48,12 @@ CHAT_SENT_TO_HEADER = "Sent to"
 
 app = Flask(__name__)
 load_dotenv()
+
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")
+CORS(
+    app,
+    resources={r"/api/*": {"origins": [o.strip() for o in CORS_ORIGINS.split(",")] if CORS_ORIGINS != "*" else "*"}},
+)
 
 GROK_API_KEY = os.getenv("GROK_API_KEY", "")
 GROK_BASE_URL = os.getenv("GROK_BASE_URL", "https://api.x.ai/v1")
