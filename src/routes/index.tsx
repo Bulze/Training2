@@ -418,12 +418,12 @@ function AdminPanel() {
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<TabsList className="flex flex-col w-full bg-transparent border-0 p-0 gap-2">
-							<TabsTrigger value="management" className="justify-start gap-2 w-full">
+						<TabsList className="flex flex-col w-full h-auto bg-transparent border-0 p-0 gap-2">
+							<TabsTrigger value="management" className="justify-start gap-2 w-full flex-none">
 								<Users className="w-4 h-4" />
 								Management
 							</TabsTrigger>
-							<TabsTrigger value="training" className="justify-start gap-2 w-full">
+							<TabsTrigger value="training" className="justify-start gap-2 w-full flex-none">
 								<Settings className="w-4 h-4" />
 								Training
 							</TabsTrigger>
@@ -458,11 +458,11 @@ function ManagementPanel() {
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<TabsList className="flex flex-col w-full bg-transparent border-0 p-0 gap-2">
-							<TabsTrigger value="users" className="justify-start w-full">
+						<TabsList className="flex flex-col w-full h-auto bg-transparent border-0 p-0 gap-2">
+							<TabsTrigger value="users" className="justify-start w-full flex-none">
 								User approvals
 							</TabsTrigger>
-							<TabsTrigger value="payroll" className="justify-start w-full">
+							<TabsTrigger value="payroll" className="justify-start w-full flex-none">
 								Payroll
 							</TabsTrigger>
 						</TabsList>
@@ -496,17 +496,17 @@ function TrainingPanel() {
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<TabsList className="flex flex-col w-full bg-transparent border-0 p-0 gap-2">
-							<TabsTrigger value="create" className="justify-start w-full">
+						<TabsList className="flex flex-col w-full h-auto bg-transparent border-0 p-0 gap-2">
+							<TabsTrigger value="create" className="justify-start w-full flex-none">
 								Create training
 							</TabsTrigger>
-							<TabsTrigger value="manage" className="justify-start w-full">
+							<TabsTrigger value="manage" className="justify-start w-full flex-none">
 								Manage tests
 							</TabsTrigger>
-							<TabsTrigger value="roles" className="justify-start w-full">
+							<TabsTrigger value="roles" className="justify-start w-full flex-none">
 								Roles & inflow
 							</TabsTrigger>
-							<TabsTrigger value="submissions" className="justify-start w-full">
+							<TabsTrigger value="submissions" className="justify-start w-full flex-none">
 								Submissions
 							</TabsTrigger>
 						</TabsList>
