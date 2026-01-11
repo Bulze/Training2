@@ -24,6 +24,18 @@ import { CreateData, CreateValue, DataStoreClient, ParseValue } from "@/sdk/data
 import { DataType, SimpleSelector, type Value } from "@/sdk/database/orm/common";
 import Player from "@vimeo/player";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+	addDays,
+	addMonths,
+	endOfMonth,
+	endOfWeek,
+	format,
+	isSameMonth,
+	parseISO,
+	startOfMonth,
+	startOfWeek,
+	subMonths,
+} from "date-fns";
 
 export const Route = createFileRoute("/")({
 	component: App,
@@ -1146,7 +1158,7 @@ function PayrollPanel() {
 	const [dateTo, setDateTo] = useState("");
 	const [minDate, setMinDate] = useState("");
 	const [maxDate, setMaxDate] = useState("");
-	const [defaultPercent, setDefaultPercent] = useState(10);
+	const [defaultPercent, setDefaultPercent] = useState(9);
 	const [aiEnabled, setAiEnabled] = useState(false);
 	const [status, setStatus] = useState("Ready");
 	const [employees, setEmployees] = useState<PayrollEmployee[]>([]);
@@ -1237,6 +1249,25 @@ function PayrollPanel() {
 			cancelled = true;
 		};
 	}, []);
+
+	const buildCurrentSnapshot = (nextEmployees?: PayrollEmployee[]): PayrollSnapshot | null => {
+		const employeesToSave = nextEmployees ?? employees;
+		if (!employeesToSave.length || !minDate || !maxDate) return null;
+		return {
+			min_date: minDate,
+			max_date: maxDate,
+			employees: employeesToSave,
+			ai_status: aiStatus || undefined,
+			ppv_day: ppvDay,
+		};
+	};
+
+	const persistSnapshot = async (nextEmployees?: PayrollEmployee[]) => {
+		const snapshot = buildCurrentSnapshot(nextEmployees);
+		if (!snapshot) return;
+		const updatedIso = await savePayrollSnapshot(snapshot);
+		setUpdatedAt(updatedIso);
+	};
 
 	useEffect(() => {
 		if (!employees.length) {
@@ -1393,7 +1424,7 @@ function PayrollPanel() {
 			if (!dateFrom && data.min_date) setDateFrom(data.min_date);
 			if (!dateTo && data.max_date) setDateTo(data.max_date);
 
-			const percentValue = Number(defaultPercent) || 10;
+			const percentValue = Number(defaultPercent) || 9;
 			const preparedEmployees = (data.employees || []).map((emp) => ({
 				...emp,
 				percent: percentValue / 100,
@@ -1435,12 +1466,12 @@ function PayrollPanel() {
 	const handleDefaultPercentChange = (value: number) => {
 		setDefaultPercent(value);
 		if (Number.isNaN(value)) return;
-		setEmployees((prev) =>
-			prev.map((emp) => ({
-				...emp,
-				percent: value / 100,
-			})),
-		);
+		const nextEmployees = employees.map((emp) => ({
+			...emp,
+			percent: value / 100,
+		}));
+		setEmployees(nextEmployees);
+		persistSnapshot(nextEmployees).catch(() => {});
 		if (selectedEmployeeName) {
 			setDetailPercent(value.toFixed(2));
 		}
@@ -1450,16 +1481,16 @@ function PayrollPanel() {
 		if (!selectedEmployeeName) return;
 		const percentValue = parseFloat(detailPercent);
 		const penaltyValue = parseFloat(detailPenalty);
-		setEmployees((prev) =>
-			prev.map((emp) => {
-				if (emp.employee !== selectedEmployeeName) return emp;
-				return {
-					...emp,
-					percent: Number.isNaN(percentValue) ? emp.percent : percentValue / 100,
-					penalty: Number.isNaN(penaltyValue) ? emp.penalty : penaltyValue,
-				};
-			}),
-		);
+		const nextEmployees = employees.map((emp) => {
+			if (emp.employee !== selectedEmployeeName) return emp;
+			return {
+				...emp,
+				percent: Number.isNaN(percentValue) ? emp.percent : percentValue / 100,
+				penalty: Number.isNaN(penaltyValue) ? emp.penalty : penaltyValue,
+			};
+		});
+		setEmployees(nextEmployees);
+		persistSnapshot(nextEmployees).catch(() => {});
 	};
 
 	const handleAiTest = async () => {
@@ -2348,6 +2379,7 @@ function UserView({ user }: { user: UsersModel }) {
 function ChatterDashboard({ user }: { user: UsersModel }) {
 	const [snapshot, setSnapshot] = useState<PayrollSnapshot | null>(null);
 	const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+	const [calendarMonth, setCalendarMonth] = useState<Date | null>(null);
 
 	const loadSnapshot = async () => {
 		const stored = await fetchPayrollSnapshot();
@@ -2363,6 +2395,60 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const employee = inflow && snapshot
 		? snapshot.employees.find((emp) => emp.employee.toLowerCase() === inflow.toLowerCase())
 		: null;
+
+	const percent = Number(employee?.percent ?? 0.09);
+	const penalty = Number(employee?.penalty ?? 0);
+	const sales = Number(employee?.sales ?? 0);
+	const bonus = Number(employee?.bonus ?? 0);
+	const totalEarned = sales * percent + bonus - penalty;
+
+	const dailyEarned = useMemo(() => {
+		const daily = employee?.daily_sales || {};
+		const entries = Object.entries(daily)
+			.map(([dateKey, value]) => {
+				const date = (() => {
+					try {
+						return parseISO(dateKey);
+					} catch {
+						return null;
+					}
+				})();
+				return { dateKey, date, earned: Number(value ?? 0) * percent };
+			})
+			.filter((x) => x.date);
+		entries.sort((a, b) => (a.date as Date).getTime() - (b.date as Date).getTime());
+		return entries as Array<{ dateKey: string; date: Date; earned: number }>;
+	}, [employee, percent]);
+
+	useEffect(() => {
+		if (!snapshot || calendarMonth) return;
+		const base = snapshot.max_date || snapshot.min_date;
+		if (!base) return;
+		try {
+			setCalendarMonth(startOfMonth(parseISO(base)));
+		} catch {
+			setCalendarMonth(startOfMonth(new Date()));
+		}
+	}, [snapshot, calendarMonth]);
+
+	const calendarDays = useMemo(() => {
+		if (!calendarMonth) return [];
+		const start = startOfWeek(startOfMonth(calendarMonth), { weekStartsOn: 1 });
+		const end = endOfWeek(endOfMonth(calendarMonth), { weekStartsOn: 1 });
+		const days: Date[] = [];
+		for (let day = start; day <= end; day = addDays(day, 1)) {
+			days.push(day);
+		}
+		return days;
+	}, [calendarMonth]);
+
+	const earnedByDay = useMemo(() => {
+		const map = new Map<string, number>();
+		for (const item of dailyEarned) {
+			map.set(item.dateKey, item.earned);
+		}
+		return map;
+	}, [dailyEarned]);
 
 	return (
 		<Card className="bg-slate-900 border-slate-800">
@@ -2405,39 +2491,132 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				)}
 
 				{employee && (
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<Card className="bg-slate-800 border-slate-700">
-							<CardHeader>
-								<CardTitle className="text-sm text-slate-200">Sales</CardTitle>
-							</CardHeader>
-							<CardContent className="text-2xl font-semibold text-emerald-400">
-								${employee.sales.toFixed(2)}
-							</CardContent>
-						</Card>
-						<Card className="bg-slate-800 border-slate-700">
-							<CardHeader>
-								<CardTitle className="text-sm text-slate-200">Bonus</CardTitle>
-							</CardHeader>
-							<CardContent className="text-2xl font-semibold text-sky-400">
-								${employee.bonus.toFixed(2)}
-							</CardContent>
-						</Card>
-						<Card className="bg-slate-800 border-slate-700">
-							<CardHeader>
-								<CardTitle className="text-sm text-slate-200">Tips</CardTitle>
-							</CardHeader>
-							<CardContent className="text-2xl font-semibold text-pink-400">
-								${employee.tips.toFixed(2)}
-							</CardContent>
-						</Card>
-						<Card className="bg-slate-800 border-slate-700">
-							<CardHeader>
-								<CardTitle className="text-sm text-slate-200">Clocked Hours</CardTitle>
-							</CardHeader>
-							<CardContent className="text-2xl font-semibold text-slate-200">
-								{employee.clocked_hours?.toFixed(1) ?? "—"}
-							</CardContent>
-						</Card>
+					<div className="space-y-4">
+						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+							<Card className="bg-slate-800 border-slate-700">
+								<CardHeader>
+									<CardTitle className="text-sm text-slate-200">Total Sales</CardTitle>
+								</CardHeader>
+								<CardContent className="text-2xl font-semibold text-emerald-400">
+									${sales.toFixed(2)}
+								</CardContent>
+							</Card>
+							<Card className="bg-slate-800 border-slate-700">
+								<CardHeader>
+									<CardTitle className="text-sm text-slate-200">Total Bonus</CardTitle>
+								</CardHeader>
+								<CardContent className="text-2xl font-semibold text-sky-400">
+									${bonus.toFixed(2)}
+								</CardContent>
+							</Card>
+							<Card className="bg-slate-800 border-slate-700">
+								<CardHeader>
+									<CardTitle className="text-sm text-slate-200">Total Earnings</CardTitle>
+									<CardDescription className="text-slate-400">
+										{(percent * 100).toFixed(2)}% • penalty ${penalty.toFixed(2)}
+									</CardDescription>
+								</CardHeader>
+								<CardContent className="text-2xl font-semibold text-amber-300">
+									${totalEarned.toFixed(2)}
+								</CardContent>
+							</Card>
+						</div>
+
+						<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+							<Card className="bg-slate-800 border-slate-700">
+								<CardHeader>
+									<CardTitle className="text-sm text-slate-200">Daily Earnings</CardTitle>
+								</CardHeader>
+								<CardContent>
+									{dailyEarned.length ? (
+										<ResponsiveContainer width="100%" height={240}>
+											<LineChart data={dailyEarned.map((d) => ({ date: d.dateKey, earned: d.earned }))}>
+												<CartesianGrid stroke="rgba(31,42,68,0.4)" />
+												<XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 11 }} />
+												<YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
+												<Tooltip />
+												<Line
+													type="monotone"
+													dataKey="earned"
+													stroke="#fbbf24"
+													strokeWidth={2}
+													dot={false}
+												/>
+											</LineChart>
+										</ResponsiveContainer>
+									) : (
+										<p className="text-sm text-slate-400">No daily data available.</p>
+									)}
+								</CardContent>
+							</Card>
+
+							<Card className="bg-slate-800 border-slate-700">
+								<CardHeader className="flex flex-row items-center justify-between gap-2">
+									<div>
+										<CardTitle className="text-sm text-slate-200">Earnings Calendar</CardTitle>
+										{calendarMonth && (
+											<CardDescription className="text-slate-400">
+												{format(calendarMonth, "MMMM yyyy")}
+											</CardDescription>
+										)}
+									</div>
+									<div className="flex gap-2">
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => calendarMonth && setCalendarMonth(subMonths(calendarMonth, 1))}
+											disabled={!calendarMonth}
+										>
+											Prev
+										</Button>
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => calendarMonth && setCalendarMonth(addMonths(calendarMonth, 1))}
+											disabled={!calendarMonth}
+										>
+											Next
+										</Button>
+									</div>
+								</CardHeader>
+								<CardContent>
+									{calendarMonth ? (
+										<div className="grid grid-cols-7 gap-2 text-xs">
+											{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+												<div key={d} className="text-slate-400 text-center">
+													{d}
+												</div>
+											))}
+											{calendarDays.map((day) => {
+												const key = format(day, "yyyy-MM-dd");
+												const amount = earnedByDay.get(key) ?? 0;
+												const muted = !isSameMonth(day, calendarMonth);
+												return (
+													<div
+														key={key}
+														className={`rounded border border-slate-700 p-2 min-h-[64px] ${
+															muted ? "opacity-40" : ""
+														}`}
+													>
+														<div className="flex justify-between text-slate-300">
+															<span>{format(day, "d")}</span>
+															<span className="text-amber-300">{amount ? `$${amount.toFixed(0)}` : ""}</span>
+														</div>
+														{amount > 0 && (
+															<div className="mt-1 text-slate-400">
+																${amount.toFixed(2)}
+															</div>
+														)}
+													</div>
+												);
+											})}
+										</div>
+									) : (
+										<p className="text-sm text-slate-400">No calendar range.</p>
+									)}
+								</CardContent>
+							</Card>
+						</div>
 					</div>
 				)}
 				{lastUpdated && (
