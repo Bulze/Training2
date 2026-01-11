@@ -57,6 +57,13 @@ const PAYROLL_STORE = {
 const PAYROLL_KEY = "current";
 const PAYROLL_API_BASE_CLEAN = PAYROLL_API_BASE.replace(/\/+$/, "");
 const PAYROLL_API_HINT = `Check VITE_PAYROLL_API_BASE (currently ${PAYROLL_API_BASE_CLEAN}) points to the payroll backend that implements POST /api/analyze and POST /api/ai-test.`;
+const CHATTER_ADMIN_STORE = {
+	id: "chatter_admin_v1",
+	namespace: "training_app",
+	name: "chatter_admin",
+	version: "1",
+	task: "chatter_admin",
+};
 
 type PayrollEmployee = {
 	employee: string;
@@ -134,6 +141,13 @@ type PayrollEmployeeFeedback = {
 	error?: string;
 };
 
+type ChatterAdminMeta = {
+	manual_bonus?: number;
+	manual_penalty?: number;
+	admin_notes?: string;
+	admin_review?: string;
+};
+
 const payrollClient = DataStoreClient.getInstance();
 
 const valuesToObject = (values: Value[]) => {
@@ -194,6 +208,60 @@ const clearPayrollSnapshot = async () => {
 		index: buildPayrollIndex(PAYROLL_KEY),
 		format: { structured: true },
 	});
+};
+
+const buildChatterAdminIndex = (userId: string) => ({
+	fields: ["user_id"],
+	values: [CreateValue(DataType.string, userId, "user_id")],
+});
+
+const fetchChatterAdminMeta = async (userId: string) => {
+	const response = await payrollClient.get({
+		...CHATTER_ADMIN_STORE,
+		index: buildChatterAdminIndex(userId),
+		format: { structured: true },
+	});
+	const structured = response.data?.values?.[0]?.structured || [];
+	if (structured.length === 0) {
+		return { meta: null as ChatterAdminMeta | null, updatedAt: null as string | null };
+	}
+	const record = valuesToObject(structured) as {
+		manual_bonus?: number;
+		manual_penalty?: number;
+		admin_notes?: string;
+		admin_review?: string;
+		updated_at?: string;
+	};
+	return {
+		meta: {
+			manual_bonus: Number(record.manual_bonus ?? 0),
+			manual_penalty: Number(record.manual_penalty ?? 0),
+			admin_notes: String(record.admin_notes ?? ""),
+			admin_review: String(record.admin_review ?? ""),
+		},
+		updatedAt: record.updated_at ?? null,
+	};
+};
+
+const saveChatterAdminMeta = async (userId: string, meta: ChatterAdminMeta) => {
+	const updatedAt = new Date().toISOString();
+	const data = CreateData([
+		CreateValue(DataType.string, userId, "user_id"),
+		CreateValue(DataType.number, Number(meta.manual_bonus ?? 0), "manual_bonus"),
+		CreateValue(DataType.number, Number(meta.manual_penalty ?? 0), "manual_penalty"),
+		CreateValue(DataType.string, meta.admin_notes ?? "", "admin_notes"),
+		CreateValue(DataType.string, meta.admin_review ?? "", "admin_review"),
+		CreateValue(DataType.string, updatedAt, "updated_at"),
+	]);
+
+	await payrollClient.set({
+		...CHATTER_ADMIN_STORE,
+		index: buildChatterAdminIndex(userId),
+		data,
+		format: { structured: true },
+	});
+
+	return updatedAt;
 };
 
 // Helper function to extract YouTube video ID from URL
@@ -1185,7 +1253,7 @@ function UserApprovalsPanel() {
 								<p className="text-slate-100 font-medium">{user.name}</p>
 								<p className="text-sm text-slate-400">{user.email}</p>
 								<p className="text-xs text-slate-500">
-									Role: {user.role || DEFAULT_ROLE} · Inflow: {user.inflow_username || "—"}
+									Role: {user.role || DEFAULT_ROLE} | Inflow: {user.inflow_username || "—"}
 								</p>
 							</div>
 							<div className="flex gap-2">
@@ -1222,7 +1290,6 @@ function PayrollPanel() {
 	const [employees, setEmployees] = useState<PayrollEmployee[]>([]);
 	const [selectedEmployeeName, setSelectedEmployeeName] = useState<string | null>(null);
 	const [detailPercent, setDetailPercent] = useState("");
-	const [detailPenalty, setDetailPenalty] = useState("");
 	const [ppvDay, setPpvDay] = useState<PayrollPpvDay>({});
 	const [activeTab, setActiveTab] = useState<"detail" | "ppv">("detail");
 	const [compareA, setCompareA] = useState("");
@@ -1340,12 +1407,11 @@ function PayrollPanel() {
 	const computedEmployees = useMemo(() => {
 		return employees.map((emp) => {
 			const percent = Number(emp.percent ?? defaultPercent / 100);
-			const penalty = Number(emp.penalty ?? 0);
 			const sales = Number(emp.sales ?? 0);
 			const bonus = Number(emp.bonus ?? 0);
 			const basePay = sales * percent;
-			const totalPay = basePay + bonus - penalty;
-			return { ...emp, percent, penalty, basePay, totalPay };
+			const totalPay = basePay + bonus;
+			return { ...emp, percent, basePay, totalPay };
 		});
 	}, [employees, defaultPercent]);
 
@@ -1392,7 +1458,6 @@ function PayrollPanel() {
 		if (!selectedEmployee) return;
 		const percentValue = Number(selectedEmployee.percent ?? defaultPercent / 100) * 100;
 		setDetailPercent(percentValue.toFixed(2));
-		setDetailPenalty(Number(selectedEmployee.penalty ?? 0).toFixed(2));
 	}, [selectedEmployee, defaultPercent]);
 
 	const formatMoney = (value: number) => `$${value.toFixed(2)}`;
@@ -1544,13 +1609,11 @@ function PayrollPanel() {
 	const handleApply = () => {
 		if (!selectedEmployeeName) return;
 		const percentValue = parseFloat(detailPercent);
-		const penaltyValue = parseFloat(detailPenalty);
 		const nextEmployees = employees.map((emp) => {
 			if (emp.employee !== selectedEmployeeName) return emp;
 			return {
 				...emp,
 				percent: Number.isNaN(percentValue) ? emp.percent : percentValue / 100,
-				penalty: Number.isNaN(penaltyValue) ? emp.penalty : penaltyValue,
 			};
 		});
 		setEmployees(nextEmployees);
@@ -1830,7 +1893,6 @@ function PayrollPanel() {
 							<tr>
 								<th>Employee</th>
 								<th>Percent</th>
-								<th>Penalty</th>
 								<th>Sales</th>
 								<th>Bonus</th>
 								<th>Base Pay</th>
@@ -1842,7 +1904,6 @@ function PayrollPanel() {
 								<tr key={emp.employee} onClick={() => setSelectedEmployeeName(emp.employee)}>
 									<td>{emp.employee}</td>
 									<td>{((emp.percent ?? 0) * 100).toFixed(2)}%</td>
-									<td>{formatMoney(Number(emp.penalty ?? 0))}</td>
 									<td>{formatMoney(Number(emp.sales ?? 0))}</td>
 									<td>{formatMoney(Number(emp.bonus ?? 0))}</td>
 									<td>{formatMoney(Number(emp.basePay ?? 0))}</td>
@@ -1851,12 +1912,12 @@ function PayrollPanel() {
 							))}
 							{sortedEmployees.length > 0 && visibleEmployees.length === 0 && (
 								<tr>
-									<td colSpan={7}>No users match your search.</td>
+									<td colSpan={6}>No users match your search.</td>
 								</tr>
 							)}
 							{sortedEmployees.length === 0 && (
 								<tr>
-									<td colSpan={7}>No payroll data loaded.</td>
+									<td colSpan={6}>No payroll data loaded.</td>
 								</tr>
 							)}
 						</tbody>
@@ -1873,16 +1934,6 @@ function PayrollPanel() {
 								step={0.1}
 								value={detailPercent}
 								onChange={(e) => setDetailPercent(e.target.value)}
-							/>
-						</div>
-						<div>
-							<label>Penalty</label>
-							<input
-								type="number"
-								min={0}
-								step={0.01}
-								value={detailPenalty}
-								onChange={(e) => setDetailPenalty(e.target.value)}
 							/>
 						</div>
 						<button type="button" className="btn accent" onClick={handleApply}>
@@ -2099,15 +2150,21 @@ function TrainingRolesPanel() {
 	const usersOrm = UsersORM.getInstance();
 	const queryClient = useQueryClient();
 	const [edits, setEdits] = useState<Record<string, Partial<UsersModel>>>({});
+	const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+	const [search, setSearch] = useState("");
+	const [metaDrafts, setMetaDrafts] = useState<Record<string, ChatterAdminMeta>>({});
+	const [metaUpdatedAt, setMetaUpdatedAt] = useState<Record<string, string | null>>({});
 
 	const { data: users = [] } = useQuery({
 		queryKey: ["allUsers"],
 		queryFn: () => usersOrm.getAllUsers(),
 	});
 
-	const updateUser = useMutation({
-		mutationFn: async (user: UsersModel) => {
-			await usersOrm.setUsersById(user.id, user);
+	const saveUserAndMeta = useMutation({
+		mutationFn: async (payload: { user: UsersModel; userPatch: Partial<UsersModel>; meta: ChatterAdminMeta }) => {
+			await usersOrm.setUsersById(payload.user.id, { ...payload.user, ...payload.userPatch });
+			const updatedIso = await saveChatterAdminMeta(payload.user.id, payload.meta);
+			return { updatedIso };
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["allUsers"] });
@@ -2121,61 +2178,224 @@ function TrainingRolesPanel() {
 		}));
 	};
 
-	const trainingUsers = users.filter((user) => !user.is_admin);
+	const trainingUsers = users
+		.filter((user) => !user.is_admin)
+		.slice()
+		.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+	useEffect(() => {
+		if (selectedUserId) return;
+		if (trainingUsers.length === 0) return;
+		setSelectedUserId(trainingUsers[0].id);
+	}, [selectedUserId, trainingUsers]);
+
+	const selectedUser = selectedUserId ? trainingUsers.find((u) => u.id === selectedUserId) ?? null : null;
+
+	const { data: selectedMetaResponse } = useQuery({
+		queryKey: ["chatterAdminMeta", selectedUserId],
+		enabled: Boolean(selectedUserId),
+		queryFn: () => fetchChatterAdminMeta(selectedUserId as string),
+	});
+
+	useEffect(() => {
+		if (!selectedUserId) return;
+		if (metaDrafts[selectedUserId]) return;
+		const meta = selectedMetaResponse?.meta;
+		setMetaDrafts((prev) => ({
+			...prev,
+			[selectedUserId]: meta ?? { manual_bonus: 0, manual_penalty: 0, admin_notes: "", admin_review: "" },
+		}));
+		setMetaUpdatedAt((prev) => ({
+			...prev,
+			[selectedUserId]: selectedMetaResponse?.updatedAt ?? null,
+		}));
+	}, [selectedUserId, selectedMetaResponse, metaDrafts]);
+
+	const updateMeta = (userId: string, patch: Partial<ChatterAdminMeta>) => {
+		setMetaDrafts((prev) => ({
+			...prev,
+			[userId]: { ...(prev[userId] ?? {}), ...patch },
+		}));
+	};
+
+	const filteredUsers = useMemo(() => {
+		const q = search.trim().toLowerCase();
+		if (!q) return trainingUsers;
+		return trainingUsers.filter((u) => {
+			const name = (u.name || "").toLowerCase();
+			const email = (u.email || "").toLowerCase();
+			const inflow = (u.inflow_username || "").toLowerCase();
+			return name.includes(q) || email.includes(q) || inflow.includes(q);
+		});
+	}, [trainingUsers, search]);
 
 	return (
 		<Card className="bg-slate-900 border-slate-800">
 			<CardHeader>
 				<CardTitle className="text-slate-100">Roles & Inflow Mapping</CardTitle>
 				<CardDescription className="text-slate-400">
-					Assign roles and inflow usernames for payroll dashboards
+					Assign roles, inflow usernames, and admin adjustments (bonuses/penalties + reviews)
 				</CardDescription>
 			</CardHeader>
-			<CardContent className="space-y-4">
-				{trainingUsers.map((user) => {
-					const draft = edits[user.id] || {};
-					const role = (draft.role ?? user.role ?? DEFAULT_ROLE) as string;
-					const inflow = (draft.inflow_username ?? user.inflow_username ?? "") as string;
-					return (
-						<div key={user.id} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center p-4 border border-slate-800 rounded-lg bg-slate-800/40">
-							<div>
-								<p className="text-slate-100 font-medium">{user.name}</p>
-								<p className="text-xs text-slate-400">{user.email}</p>
-							</div>
-							<div className="space-y-2">
-								<Label>Role</Label>
-								<select
-									className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
-									value={role}
-									onChange={(e) => updateEdit(user.id, { role: e.target.value })}
+			<CardContent className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
+				<div className="space-y-3">
+					<Input
+						value={search}
+						onChange={(e) => setSearch(e.target.value)}
+						placeholder="Search user..."
+					/>
+					<div className="border border-slate-800 rounded-lg bg-slate-800/30 divide-y divide-slate-800 overflow-hidden">
+						{filteredUsers.map((user) => {
+							const active = user.id === selectedUserId;
+							return (
+								<button
+									key={user.id}
+									type="button"
+									onClick={() => setSelectedUserId(user.id)}
+									className={cn(
+										"w-full text-left px-4 py-3 hover:bg-slate-800/60 transition flex items-start justify-between gap-3",
+										active && "bg-slate-800/70",
+									)}
 								>
-									<option value="recruit">Recruit</option>
-									<option value="chatter">Chatter</option>
-								</select>
-							</div>
-							<div className="space-y-2">
-								<Label>Inflow Username</Label>
-								<Input
-									value={inflow}
-									onChange={(e) => updateEdit(user.id, { inflow_username: e.target.value })}
-									placeholder="inflow username"
-								/>
-							</div>
-							<div className="flex justify-end">
-								<Button
-									onClick={() => updateUser.mutate({ ...user, ...draft })}
-									disabled={updateUser.isPending}
-								>
-									Save
-								</Button>
-							</div>
-						</div>
-					);
-				})}
+									<div className="min-w-0">
+										<p className="text-slate-100 font-medium truncate">{user.name}</p>
+										<p className="text-xs text-slate-400 truncate">{user.inflow_username || user.email}</p>
+									</div>
+									<Badge variant="outline" className="border-slate-700 text-slate-200">
+										{user.role || DEFAULT_ROLE}
+									</Badge>
+								</button>
+							);
+						})}
+						{trainingUsers.length === 0 && (
+							<div className="px-4 py-6 text-center text-slate-500">No users available</div>
+						)}
+						{trainingUsers.length > 0 && filteredUsers.length === 0 && (
+							<div className="px-4 py-6 text-center text-slate-500">No users match your search.</div>
+						)}
+					</div>
+				</div>
 
-				{trainingUsers.length === 0 && (
-					<p className="text-center text-slate-500 py-6">No users available</p>
-				)}
+				<div className="min-w-0">
+					{!selectedUser && (
+						<div className="text-slate-400 text-sm">Select a user to edit their settings.</div>
+					)}
+
+					{selectedUser && (() => {
+						const draft = edits[selectedUser.id] || {};
+						const role = (draft.role ?? selectedUser.role ?? DEFAULT_ROLE) as string;
+						const inflow = (draft.inflow_username ?? selectedUser.inflow_username ?? "") as string;
+						const meta = metaDrafts[selectedUser.id] ?? { manual_bonus: 0, manual_penalty: 0, admin_notes: "", admin_review: "" };
+						const metaUpdated = metaUpdatedAt[selectedUser.id] ?? null;
+
+						return (
+							<Card className="bg-slate-900/40 border-slate-800">
+								<CardHeader className="pb-4">
+									<CardTitle className="text-slate-100 flex items-center justify-between gap-4">
+										<span className="truncate">{selectedUser.name}</span>
+										{metaUpdated && (
+											<span className="text-xs font-normal text-slate-500">
+												Updated {format(parseISO(metaUpdated), "MMM d, HH:mm")}
+											</span>
+										)}
+									</CardTitle>
+									<CardDescription className="text-slate-400">{selectedUser.email}</CardDescription>
+								</CardHeader>
+								<CardContent className="space-y-6">
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+										<div className="space-y-2">
+											<Label>Role</Label>
+											<select
+												className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+												value={role}
+												onChange={(e) => updateEdit(selectedUser.id, { role: e.target.value })}
+											>
+												<option value="recruit">Recruit</option>
+												<option value="chatter">Chatter</option>
+											</select>
+										</div>
+										<div className="space-y-2">
+											<Label>Inflow Username</Label>
+											<Input
+												value={inflow}
+												onChange={(e) => updateEdit(selectedUser.id, { inflow_username: e.target.value })}
+												placeholder="inflow username"
+											/>
+										</div>
+									</div>
+
+									<Separator className="bg-slate-800" />
+
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+										<div className="space-y-2">
+											<Label>Manual Bonus ($)</Label>
+											<Input
+												type="number"
+												min={0}
+												step={0.01}
+												value={String(meta.manual_bonus ?? 0)}
+												onChange={(e) => updateMeta(selectedUser.id, { manual_bonus: Number(e.target.value || 0) })}
+											/>
+										</div>
+										<div className="space-y-2">
+											<Label>Manual Penalty ($)</Label>
+											<Input
+												type="number"
+												min={0}
+												step={0.01}
+												value={String(meta.manual_penalty ?? 0)}
+												onChange={(e) => updateMeta(selectedUser.id, { manual_penalty: Number(e.target.value || 0) })}
+											/>
+										</div>
+									</div>
+
+									<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+										<div className="space-y-2">
+											<Label>Admin notes (private)</Label>
+											<Textarea
+												value={meta.admin_notes ?? ""}
+												onChange={(e) => updateMeta(selectedUser.id, { admin_notes: e.target.value })}
+												placeholder="Private notes for admins..."
+												className="min-h-[130px]"
+											/>
+										</div>
+										<div className="space-y-2">
+											<Label>Admin review (visible to chatter)</Label>
+											<Textarea
+												value={meta.admin_review ?? ""}
+												onChange={(e) => updateMeta(selectedUser.id, { admin_review: e.target.value })}
+												placeholder="This will appear on the chatter dashboard..."
+												className="min-h-[130px]"
+											/>
+										</div>
+									</div>
+
+									<div className="flex justify-end">
+										<Button
+											onClick={() => {
+												saveUserAndMeta.mutate(
+													{
+														user: selectedUser,
+														userPatch: draft,
+														meta,
+													},
+													{
+														onSuccess: (result) => {
+															setMetaUpdatedAt((prev) => ({ ...prev, [selectedUser.id]: result.updatedIso }));
+														},
+													},
+												);
+											}}
+											disabled={saveUserAndMeta.isPending}
+										>
+											Save changes
+										</Button>
+									</div>
+								</CardContent>
+							</Card>
+						);
+					})()}
+				</div>
 			</CardContent>
 		</Card>
 	);
@@ -2450,6 +2670,10 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const [snapshot, setSnapshot] = useState<PayrollSnapshot | null>(null);
 	const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 	const [calendarMonth, setCalendarMonth] = useState<Date | null>(null);
+	const { data: chatterMetaResponse } = useQuery({
+		queryKey: ["chatterAdminMeta", user.id],
+		queryFn: () => fetchChatterAdminMeta(user.id),
+	});
 
 	const loadSnapshot = async () => {
 		const stored = await fetchPayrollSnapshot();
@@ -2467,10 +2691,12 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		: null;
 
 	const percent = Number(employee?.percent ?? 0.09);
-	const penalty = Number(employee?.penalty ?? 0);
+	const chatterMeta = chatterMetaResponse?.meta ?? null;
+	const manualBonus = Number(chatterMeta?.manual_bonus ?? 0);
+	const manualPenalty = Number(chatterMeta?.manual_penalty ?? 0);
 	const sales = Number(employee?.sales ?? 0);
 	const bonus = Number(employee?.bonus ?? 0);
-	const totalEarned = sales * percent + bonus - penalty;
+	const totalEarned = sales * percent + bonus + manualBonus - manualPenalty;
 
 	const dailyEarned = useMemo(() => {
 		const byDate = new Map<string, { sales: number; bonus: number }>();
@@ -2662,6 +2888,19 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 
 				{employee && (
 					<div className="space-y-6">
+						{(chatterMeta?.admin_review || "").trim() && (
+							<Card className="bg-slate-900/40 border-slate-800">
+								<CardHeader className="py-4">
+									<CardTitle className="text-sm text-slate-200">Admin review</CardTitle>
+									<CardDescription className="text-slate-400">Feedback from management</CardDescription>
+								</CardHeader>
+								<CardContent className="pt-0">
+									<p className="text-slate-200 whitespace-pre-wrap">
+										{(chatterMeta?.admin_review || "").trim()}
+									</p>
+								</CardContent>
+							</Card>
+						)}
 						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 							<Card className="bg-gradient-to-br from-emerald-500/10 to-slate-900 border-slate-800">
 								<CardHeader className="pb-2">
@@ -2687,7 +2926,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 								<CardHeader className="pb-2">
 									<CardTitle className="text-xs uppercase tracking-wide text-slate-300">Total Earnings</CardTitle>
 									<CardDescription className="text-slate-400">
-										{(percent * 100).toFixed(2)}% • penalty {formatCurrency(penalty)}
+										{(percent * 100).toFixed(2)}% | manual bonus {formatCurrency(manualBonus)} | manual penalty {formatCurrency(manualPenalty)}
 									</CardDescription>
 								</CardHeader>
 								<CardContent>

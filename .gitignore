@@ -7,3 +7,4 @@ payroll/.env
 example/.env
 __pycache__/
 *.pyc
+*.xlsx
