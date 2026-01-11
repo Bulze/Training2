@@ -30,10 +30,12 @@ import {
 	endOfMonth,
 	endOfWeek,
 	format,
+	getDay,
 	isSameMonth,
 	parseISO,
 	startOfMonth,
 	startOfWeek,
+	subDays,
 	subMonths,
 } from "date-fns";
 
@@ -2473,6 +2475,47 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		return map;
 	}, [dailyEarned]);
 
+	const payPeriods = useMemo(() => {
+		if (!dailyEarned.length) return [];
+		const first = dailyEarned[0].date;
+		const last = dailyEarned[dailyEarned.length - 1].date;
+
+		// Agency "cutoff" happens Thu->Fri, so periods start on Friday.
+		// We group into 14-day periods (roughly 2 per month).
+		const PERIOD_DAYS = 14;
+		let start = first;
+		// Align to previous Friday (period starts Friday).
+		while (getDay(start) !== 5) start = subDays(start, 1);
+
+		const periods: Array<{ start: Date; endExclusive: Date; cutoff: Date; total: number; key: string }> = [];
+		while (start <= addDays(last, 1)) {
+			const endExclusive = addDays(start, PERIOD_DAYS);
+			const cutoff = subDays(endExclusive, 1); // Thursday
+			const key = `${format(start, "yyyy-MM-dd")}__${format(endExclusive, "yyyy-MM-dd")}`;
+			let total = 0;
+			for (const [dateKey, amount] of earnedByDay.entries()) {
+				let day: Date;
+				try {
+					day = parseISO(dateKey);
+				} catch {
+					continue;
+				}
+				if (day >= start && day < endExclusive) total += amount;
+			}
+			periods.push({ start, endExclusive, cutoff, total, key });
+			start = endExclusive;
+		}
+		return periods.filter((p) => p.total > 0);
+	}, [dailyEarned, earnedByDay]);
+
+	const payPeriodByCutoff = useMemo(() => {
+		const map = new Map<string, { total: number; start: Date; endExclusive: Date }>();
+		for (const p of payPeriods) {
+			map.set(format(p.cutoff, "yyyy-MM-dd"), { total: p.total, start: p.start, endExclusive: p.endExclusive });
+		}
+		return map;
+	}, [payPeriods]);
+
 	return (
 		<Card className="bg-slate-900 border-slate-800">
 			<CardHeader>
@@ -2516,7 +2559,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				{employee && (
 					<div className="space-y-4">
 						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-							<Card className="bg-slate-800 border-slate-700">
+							<Card className="bg-slate-900 border-slate-800">
 								<CardHeader>
 									<CardTitle className="text-sm text-slate-200">Total Sales</CardTitle>
 								</CardHeader>
@@ -2524,7 +2567,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 									${sales.toFixed(2)}
 								</CardContent>
 							</Card>
-							<Card className="bg-slate-800 border-slate-700">
+							<Card className="bg-slate-900 border-slate-800">
 								<CardHeader>
 									<CardTitle className="text-sm text-slate-200">Total Bonus</CardTitle>
 								</CardHeader>
@@ -2532,7 +2575,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 									${bonus.toFixed(2)}
 								</CardContent>
 							</Card>
-							<Card className="bg-slate-800 border-slate-700">
+							<Card className="bg-slate-900 border-slate-800">
 								<CardHeader>
 									<CardTitle className="text-sm text-slate-200">Total Earnings</CardTitle>
 									<CardDescription className="text-slate-400">
@@ -2546,7 +2589,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 						</div>
 
 						<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-							<Card className="bg-slate-800 border-slate-700">
+							<Card className="bg-slate-900 border-slate-800">
 								<CardHeader>
 									<CardTitle className="text-sm text-slate-200">Daily Earnings</CardTitle>
 								</CardHeader>
@@ -2573,7 +2616,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 								</CardContent>
 							</Card>
 
-							<Card className="bg-slate-800 border-slate-700">
+							<Card className="bg-slate-900 border-slate-800">
 								<CardHeader className="flex flex-row items-center justify-between gap-2">
 									<div>
 										<CardTitle className="text-sm text-slate-200">Earnings Calendar</CardTitle>
@@ -2603,6 +2646,29 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 									</div>
 								</CardHeader>
 								<CardContent>
+									{calendarMonth && payPeriods.length > 0 && (
+										<div className="mb-4 space-y-2 text-sm">
+											{payPeriods
+												.filter((p) => {
+													const monthStart = startOfMonth(calendarMonth);
+													const monthEnd = endOfMonth(calendarMonth);
+													const periodEnd = subDays(p.endExclusive, 1);
+													return p.start <= monthEnd && periodEnd >= monthStart;
+												})
+												.map((p) => (
+													<div
+														key={p.key}
+														className="flex items-center justify-between rounded border border-slate-700 bg-slate-900/30 px-3 py-2"
+													>
+														<span className="text-slate-300">
+															Cutoff {format(p.cutoff, "MMM d")} •{" "}
+															{format(p.start, "MMM d")} → {format(p.endExclusive, "MMM d")} (excl)
+														</span>
+														<span className="font-semibold text-amber-300">${p.total.toFixed(2)}</span>
+													</div>
+												))}
+										</div>
+									)}
 									{calendarMonth ? (
 										<div className="grid grid-cols-7 gap-2 text-xs">
 											{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
@@ -2613,19 +2679,30 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 											{calendarDays.map((day) => {
 												const key = format(day, "yyyy-MM-dd");
 												const amount = earnedByDay.get(key) ?? 0;
+												const cutoff = payPeriodByCutoff.get(key);
 												const muted = !isSameMonth(day, calendarMonth);
 												return (
 													<div
 														key={key}
-														className={`rounded border border-slate-700 p-2 min-h-[64px] ${
-															muted ? "opacity-40" : ""
-														}`}
+														className={[
+															"rounded border p-2 min-h-[64px]",
+															"border-slate-700",
+															cutoff ? "bg-amber-500/10 border-amber-500/40" : "bg-slate-900/20",
+															muted ? "opacity-40" : "",
+														].join(" ")}
 													>
 														<div className="flex justify-between text-slate-300">
 															<span>{format(day, "d")}</span>
-															<span className="text-amber-300">{amount ? `$${amount.toFixed(0)}` : ""}</span>
+															<span className="text-amber-300">
+																{cutoff ? "CUT" : amount ? `$${amount.toFixed(0)}` : ""}
+															</span>
 														</div>
-														{amount > 0 && (
+														{cutoff && (
+															<div className="mt-1 text-amber-300 font-semibold">
+																${cutoff.total.toFixed(2)}
+															</div>
+														)}
+														{!cutoff && amount > 0 && (
 															<div className="mt-1 text-slate-400">
 																${amount.toFixed(2)}
 															</div>
