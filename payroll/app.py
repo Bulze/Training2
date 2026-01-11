@@ -49,11 +49,27 @@ CHAT_SENT_TO_HEADER = "Sent to"
 app = Flask(__name__)
 load_dotenv()
 
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")
-CORS(
-    app,
-    resources={r"/api/*": {"origins": [o.strip() for o in CORS_ORIGINS.split(",")] if CORS_ORIGINS != "*" else "*"}},
-)
+def normalize_cors_origins(raw):
+    if not raw:
+        return "*"
+    cleaned = raw.strip()
+    if cleaned == "*":
+        return "*"
+    origins = []
+    for part in cleaned.split(","):
+        origin = part.strip()
+        if not origin:
+            continue
+        if "://" in origin:
+            origins.append(origin)
+        else:
+            origins.append(f"https://{origin}")
+            origins.append(f"http://{origin}")
+    return origins or "*"
+
+
+CORS_ORIGINS = normalize_cors_origins(os.getenv("CORS_ORIGINS", "*"))
+CORS(app, resources={r"/api/*": {"origins": CORS_ORIGINS}})
 
 GROK_API_KEY = os.getenv("GROK_API_KEY", "")
 GROK_BASE_URL = os.getenv("GROK_BASE_URL", "https://api.x.ai/v1")
