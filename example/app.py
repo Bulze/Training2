@@ -902,22 +902,12 @@ def analyze():
         ai_status = "no_key"
     if ai_enabled and GROK_API_KEY:
         ai_status = "enabled"
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = {}
-            for emp in data["employees"]:
-                futures[executor.submit(build_ai_insights, emp, True)] = (emp, "insights")
-                if emp.get("chat"):
-                    futures[executor.submit(build_ai_chatter_summary, emp, True)] = (
-                        emp,
-                        "chat_ai",
-                    )
-            for future in futures:
-                emp, key = futures[future]
-                emp[key] = future.result()
-    else:
-        for emp in data["employees"]:
-            emp["insights"] = build_insights(emp)
-            emp["chat_ai"] = build_ai_chatter_summary(emp, False)
+
+    # Keep /api/analyze fast and reliable: compute non-AI insights here.
+    # AI coaching is fetched per chatter via /api/employee-feedback.
+    for emp in data["employees"]:
+        emp["insights"] = build_insights(emp)
+        emp["chat_ai"] = build_ai_chatter_summary(emp, False)
 
     data["ai_status"] = ai_status
 

@@ -1417,9 +1417,9 @@ function PayrollPanel() {
 			setUpdatedAt(updatedIso);
 
 			if (data.ai_status === "enabled") {
-				setStatus(`Calculated with AI insights (${preparedEmployees.length} employees).`);
+				setStatus(`Calculated (${preparedEmployees.length} employees). AI coaching loads on click.`);
 			} else if (data.ai_status === "no_key") {
-				setStatus(`Calculated without AI (missing key). Employees: ${preparedEmployees.length}.`);
+				setStatus(`Calculated (${preparedEmployees.length} employees). AI disabled (missing key).`);
 			} else {
 				setStatus(`Calculated. Employees: ${preparedEmployees.length}.`);
 			}
