@@ -32,8 +32,7 @@ export const Route = createFileRoute("/")({
 const ADMIN_PASSWORD = "K7M2X9Q8LP";
 const ADMIN_EMAIL = "admin@platform.com";
 const DEFAULT_ROLE = "recruit";
-const PAYROLL_API_BASE =
-	import.meta.env.VITE_PAYROLL_API_BASE || import.meta.env.VITE_API_BASE_PATH || "http://localhost:5000";
+const PAYROLL_API_BASE = import.meta.env.VITE_PAYROLL_API_BASE || "http://localhost:5000";
 const PAYROLL_STORE = {
 	id: "payroll_snapshot_v1",
 	namespace: "training_app",
@@ -43,7 +42,7 @@ const PAYROLL_STORE = {
 };
 const PAYROLL_KEY = "current";
 const PAYROLL_API_BASE_CLEAN = PAYROLL_API_BASE.replace(/\/+$/, "");
-const PAYROLL_API_HINT = `Ensure payroll API (${PAYROLL_API_BASE_CLEAN}/api) is running.`;
+const PAYROLL_API_HINT = `Check VITE_PAYROLL_API_BASE (currently ${PAYROLL_API_BASE_CLEAN}) points to the payroll backend that implements POST /api/analyze and POST /api/ai-test.`;
 
 type PayrollEmployee = {
 	employee: string;
@@ -1170,6 +1169,27 @@ function PayrollPanel() {
 		return `${label}: ${message}. ${PAYROLL_API_HINT}`;
 	};
 
+	const readJsonResponse = async <T,>(response: Response) => {
+		const contentType = response.headers.get("content-type") || "";
+		if (!contentType.includes("application/json")) {
+			const text = await response.text();
+			return { ok: false as const, status: response.status, text };
+		}
+		try {
+			const json = (await response.json()) as T;
+			return { ok: true as const, status: response.status, json };
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "Invalid JSON response";
+			return { ok: false as const, status: response.status, text: message };
+		}
+	};
+
+	const summarizeText = (text: string, limit = 180) => {
+		const compact = (text || "").replace(/\s+/g, " ").trim();
+		if (compact.length <= limit) return compact;
+		return `${compact.slice(0, limit)}…`;
+	};
+
 	useEffect(() => {
 		const raw = localStorage.getItem("payroll_snapshot");
 		if (!raw) return;
@@ -1300,9 +1320,17 @@ function PayrollPanel() {
 				method: "POST",
 				body: formData,
 			});
-			const data = (await response.json()) as PayrollSnapshot & { error?: string };
+
+			const parsed = await readJsonResponse<PayrollSnapshot & { error?: string }>(response);
+			if (!parsed.ok) {
+				setStatus(
+					`Payroll analyze failed (${parsed.status}): ${summarizeText(parsed.text)}. ${PAYROLL_API_HINT}`,
+				);
+				return;
+			}
+			const data = parsed.json;
 			if (!response.ok) {
-				setStatus(data.error || "Failed to analyze file.");
+				setStatus(data.error || `Failed to analyze file. ${PAYROLL_API_HINT}`);
 				return;
 			}
 
@@ -1382,7 +1410,14 @@ function PayrollPanel() {
 		setStatus("Testing AI...");
 		try {
 			const response = await fetch(`${PAYROLL_API_BASE}/api/ai-test`, { method: "POST" });
-			const data = (await response.json()) as { ok?: boolean; error?: string };
+			const parsed = await readJsonResponse<{ ok?: boolean; error?: string }>(response);
+			if (!parsed.ok) {
+				setStatus(
+					`AI test failed (${parsed.status}): ${summarizeText(parsed.text)}. ${PAYROLL_API_HINT}`,
+				);
+				return;
+			}
+			const data = parsed.json;
 			if (!response.ok || !data.ok) {
 				setStatus(`AI test failed: ${data.error || "unknown error"}`);
 				return;
@@ -1413,7 +1448,14 @@ function PayrollPanel() {
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(payload),
 			});
-			const data = (await response.json()) as { summary?: Record<string, string[]>; error?: string };
+			const parsed = await readJsonResponse<{ summary?: Record<string, string[]>; error?: string }>(response);
+			if (!parsed.ok) {
+				setStatus(
+					`Compare failed (${parsed.status}): ${summarizeText(parsed.text)}. ${PAYROLL_API_HINT}`,
+				);
+				return;
+			}
+			const data = parsed.json;
 			if (!response.ok) {
 				setStatus(data.error || "Compare failed.");
 				return;
