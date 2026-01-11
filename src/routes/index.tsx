@@ -409,24 +409,37 @@ function AdminPanel() {
 
 	return (
 		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "management" | "training")}>
-			<TabsList className="grid w-full grid-cols-2 mb-6 bg-slate-900 border border-slate-800">
-				<TabsTrigger value="management" className="gap-2">
-					<Users className="w-4 h-4" />
-					Management
-				</TabsTrigger>
-				<TabsTrigger value="training" className="gap-2">
-					<Settings className="w-4 h-4" />
-					Training
-				</TabsTrigger>
-			</TabsList>
+			<div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">
+				<Card className="bg-slate-900 border-slate-800 h-fit">
+					<CardHeader>
+						<CardTitle className="text-slate-100">Admin</CardTitle>
+						<CardDescription className="text-slate-400">
+							Management, payroll, trainings
+						</CardDescription>
+					</CardHeader>
+					<CardContent>
+						<TabsList className="flex flex-col w-full bg-transparent border-0 p-0 gap-2">
+							<TabsTrigger value="management" className="justify-start gap-2 w-full">
+								<Users className="w-4 h-4" />
+								Management
+							</TabsTrigger>
+							<TabsTrigger value="training" className="justify-start gap-2 w-full">
+								<Settings className="w-4 h-4" />
+								Training
+							</TabsTrigger>
+						</TabsList>
+					</CardContent>
+				</Card>
 
-			<TabsContent value="management">
-				<ManagementPanel />
-			</TabsContent>
-
-			<TabsContent value="training">
-				<TrainingPanel />
-			</TabsContent>
+				<div className="min-w-0">
+					<TabsContent value="management" className="mt-0">
+						<ManagementPanel />
+					</TabsContent>
+					<TabsContent value="training" className="mt-0">
+						<TrainingPanel />
+					</TabsContent>
+				</div>
+			</div>
 		</Tabs>
 	);
 }
@@ -436,18 +449,35 @@ function ManagementPanel() {
 
 	return (
 		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "payroll")}>
-			<TabsList className="grid w-full grid-cols-2 mb-6 bg-slate-900 border border-slate-800">
-				<TabsTrigger value="users">User Approvals</TabsTrigger>
-				<TabsTrigger value="payroll">Payroll</TabsTrigger>
-			</TabsList>
+			<div className="grid grid-cols-1 xl:grid-cols-[220px_1fr] gap-6">
+				<Card className="bg-slate-900 border-slate-800 h-fit">
+					<CardHeader>
+						<CardTitle className="text-slate-100">Management</CardTitle>
+						<CardDescription className="text-slate-400">
+							Approvals and payroll tools
+						</CardDescription>
+					</CardHeader>
+					<CardContent>
+						<TabsList className="flex flex-col w-full bg-transparent border-0 p-0 gap-2">
+							<TabsTrigger value="users" className="justify-start w-full">
+								User approvals
+							</TabsTrigger>
+							<TabsTrigger value="payroll" className="justify-start w-full">
+								Payroll
+							</TabsTrigger>
+						</TabsList>
+					</CardContent>
+				</Card>
 
-			<TabsContent value="users">
-				<UserApprovalsPanel />
-			</TabsContent>
-
-			<TabsContent value="payroll">
-				<PayrollPanel />
-			</TabsContent>
+				<div className="min-w-0">
+					<TabsContent value="users" className="mt-0">
+						<UserApprovalsPanel />
+					</TabsContent>
+					<TabsContent value="payroll" className="mt-0">
+						<PayrollPanel />
+					</TabsContent>
+				</div>
+			</div>
 		</Tabs>
 	);
 }
@@ -457,28 +487,47 @@ function TrainingPanel() {
 
 	return (
 		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "create" | "manage" | "roles" | "submissions")}>
-			<TabsList className="grid w-full grid-cols-4 mb-6 bg-slate-900 border border-slate-800">
-				<TabsTrigger value="create">Create Training</TabsTrigger>
-				<TabsTrigger value="manage">Manage Tests</TabsTrigger>
-				<TabsTrigger value="roles">Roles & Inflow</TabsTrigger>
-				<TabsTrigger value="submissions">Submissions</TabsTrigger>
-			</TabsList>
+			<div className="grid grid-cols-1 xl:grid-cols-[220px_1fr] gap-6">
+				<Card className="bg-slate-900 border-slate-800 h-fit">
+					<CardHeader>
+						<CardTitle className="text-slate-100">Training</CardTitle>
+						<CardDescription className="text-slate-400">
+							Create and manage learning
+						</CardDescription>
+					</CardHeader>
+					<CardContent>
+						<TabsList className="flex flex-col w-full bg-transparent border-0 p-0 gap-2">
+							<TabsTrigger value="create" className="justify-start w-full">
+								Create training
+							</TabsTrigger>
+							<TabsTrigger value="manage" className="justify-start w-full">
+								Manage tests
+							</TabsTrigger>
+							<TabsTrigger value="roles" className="justify-start w-full">
+								Roles & inflow
+							</TabsTrigger>
+							<TabsTrigger value="submissions" className="justify-start w-full">
+								Submissions
+							</TabsTrigger>
+						</TabsList>
+					</CardContent>
+				</Card>
 
-			<TabsContent value="create">
-				<CreateTrainingPanel />
-			</TabsContent>
-
-			<TabsContent value="manage">
-				<ManageTestsPanel />
-			</TabsContent>
-
-			<TabsContent value="roles">
-				<TrainingRolesPanel />
-			</TabsContent>
-
-			<TabsContent value="submissions">
-				<AllSubmissionsPanel />
-			</TabsContent>
+				<div className="min-w-0">
+					<TabsContent value="create" className="mt-0">
+						<CreateTrainingPanel />
+					</TabsContent>
+					<TabsContent value="manage" className="mt-0">
+						<ManageTestsPanel />
+					</TabsContent>
+					<TabsContent value="roles" className="mt-0">
+						<TrainingRolesPanel />
+					</TabsContent>
+					<TabsContent value="submissions" className="mt-0">
+						<AllSubmissionsPanel />
+					</TabsContent>
+				</div>
+			</div>
 		</Tabs>
 	);
 }
