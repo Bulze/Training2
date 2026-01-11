@@ -1460,17 +1460,26 @@ function PayrollPanel() {
 		setDetailPercent(percentValue.toFixed(2));
 	}, [selectedEmployee, defaultPercent]);
 
-	const formatMoney = (value: number) => `$${value.toFixed(2)}`;
-	const formatMaybe = (value: number | null | undefined, suffix = "") => {
-		if (value === null || value === undefined || Number.isNaN(value)) return "-";
-		return `${value.toFixed(2)}${suffix}`;
+	const formatMoney = (value: unknown) => {
+		const amount = typeof value === "number" ? value : Number(value);
+		if (!Number.isFinite(amount)) return "$0.00";
+		return `$${amount.toFixed(2)}`;
+	};
+	const formatMaybe = (value: unknown, suffix = "") => {
+		if (value === null || value === undefined) return "-";
+		const amount = typeof value === "number" ? value : Number(value);
+		if (!Number.isFinite(amount)) return "-";
+		return `${amount.toFixed(2)}${suffix}`;
 	};
 	const formatRank = (compare?: PayrollCompareMetric) => {
-		if (!compare || compare.rank === undefined || compare.total === undefined) return "-";
-		const pct = compare.percentile === undefined || compare.percentile === null
-			? "-"
-			: `${compare.percentile.toFixed(0)}%`;
-		return `#${compare.rank}/${compare.total} (${pct})`;
+		if (!compare) return "-";
+		const rank = Number(compare.rank);
+		const total = Number(compare.total);
+		if (!Number.isFinite(rank) || !Number.isFinite(total)) return "-";
+		const percentileRaw = compare.percentile;
+		const percentile = percentileRaw === undefined || percentileRaw === null ? null : Number(percentileRaw);
+		const pct = percentile === null || !Number.isFinite(percentile) ? "-" : `${percentile.toFixed(0)}%`;
+		return `#${rank}/${total} (${pct})`;
 	};
 
 	const renderList = (items?: string[]) => {
@@ -2831,9 +2840,10 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		return payPeriods.find((p) => reference >= p.start && reference < p.endExclusive) || payPeriods[payPeriods.length - 1];
 	}, [payPeriods, snapshot]);
 
-	const formatCurrency = (value: number) => {
-		if (!Number.isFinite(value)) return "$0.00";
-		return `$${value.toFixed(2)}`;
+	const formatCurrency = (value: unknown, digits = 2) => {
+		const amount = typeof value === "number" ? value : Number(value);
+		if (!Number.isFinite(amount)) return `$${Number(0).toFixed(digits)}`;
+		return `$${amount.toFixed(digits)}`;
 	};
 
 	return (
@@ -3045,7 +3055,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 															Cutoff {format(p.cutoff, "MMM d")} •{" "}
 															{format(p.start, "MMM d")} → {format(p.endExclusive, "MMM d")} (excl)
 														</span>
-														<span className="font-semibold text-amber-300">${p.total.toFixed(2)}</span>
+														<span className="font-semibold text-amber-300">{formatCurrency(p.total, 2)}</span>
 													</div>
 												))}
 										</div>
@@ -3075,17 +3085,17 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 														<div className="flex justify-between text-slate-300">
 															<span>{format(day, "d")}</span>
 															<span className="text-amber-300">
-																{cutoff ? "CUT" : amount ? `$${amount.toFixed(0)}` : ""}
+																{cutoff ? "CUT" : amount ? formatCurrency(amount, 0) : ""}
 															</span>
 														</div>
 														{cutoff && (
 															<div className="mt-1 text-amber-300 font-semibold">
-																${cutoff.total.toFixed(2)}
+																{formatCurrency(cutoff.total, 2)}
 															</div>
 														)}
 														{amount > 0 && (
 															<div className="mt-1 text-slate-400">
-																${amount.toFixed(2)}
+																{formatCurrency(amount, 2)}
 															</div>
 														)}
 													</div>
