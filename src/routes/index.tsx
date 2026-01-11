@@ -361,14 +361,15 @@ async function evaluateAnswerWithGrok(
 	idealAnswer: string,
 	userAnswer: string,
 ) {
-	const apiBase = import.meta.env.VITE_API_BASE_PATH || "";
+	const apiBaseRaw = import.meta.env.VITE_API_BASE_PATH || PAYROLL_API_BASE || "";
+	const apiBase = apiBaseRaw.replace(/\/+$/, "");
 	if (!apiBase) return null;
 
 	const controller = new AbortController();
 	const timeoutId = window.setTimeout(() => controller.abort(), 20000);
 
 	try {
-		const response = await fetch(`${apiBase}/ai/evaluate`, {
+		const response = await fetch(`${apiBase}/api/ai/evaluate`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",

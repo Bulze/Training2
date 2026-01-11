@@ -404,7 +404,7 @@ app.get("/me", (_req, res) => {
   res.json({ ok: true, userId: "local-user" });
 });
 
-app.post("/ai/evaluate", async (req, res) => {
+async function handleAiEvaluate(req, res) {
   if (!GROK_API_KEY) {
     res.status(503).json({ error: "grok_not_configured" });
     return;
@@ -467,7 +467,10 @@ User answer: ${userAnswer}`;
     console.error("Grok evaluation failed:", error);
     res.status(500).json({ error: "grok_unavailable" });
   }
-});
+}
+
+app.post("/ai/evaluate", handleAiEvaluate);
+app.post("/api/ai/evaluate", handleAiEvaluate);
 
 app.post("/data/store/v1/all", async (req, res, next) => {
   try {

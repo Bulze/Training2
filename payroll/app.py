@@ -74,6 +74,7 @@ CORS(app, resources={r"/api/*": {"origins": CORS_ORIGINS}})
 GROK_API_KEY = os.getenv("GROK_API_KEY", "")
 GROK_BASE_URL = os.getenv("GROK_BASE_URL", "https://api.x.ai/v1")
 GROK_MODEL = os.getenv("GROK_MODEL", "grok-2-mini")
+GROK_THRESHOLD = float(os.getenv("GROK_THRESHOLD", "0.7"))
 
 
 def build_grok_url():
@@ -1005,6 +1006,69 @@ def ai_test():
         return jsonify({"ok": False, "error": "Unexpected response"}), 400
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/api/ai/evaluate", methods=["POST"])
+def ai_evaluate():
+    if not GROK_API_KEY:
+        return jsonify({"error": "grok_not_configured"}), 503
+
+    payload = request.get_json(silent=True) or {}
+    question = payload.get("question") or ""
+    ideal_answer = payload.get("idealAnswer") or payload.get("ideal_answer") or ""
+    user_answer = payload.get("userAnswer") or payload.get("user_answer") or ""
+    threshold = payload.get("threshold")
+
+    if not ideal_answer or not user_answer:
+        return jsonify({"error": "missing_fields"}), 400
+
+    score_threshold = GROK_THRESHOLD
+    try:
+        if threshold is not None:
+            score_threshold = float(threshold)
+    except Exception:
+        score_threshold = GROK_THRESHOLD
+
+    prompt = f"""Evaluate semantic similarity between the ideal answer and the user answer for the question.
+Return only JSON with fields: score (0 to 1) and feedback (short).
+Accept paraphrases and different wording if meaning matches.
+
+Question: {question}
+Ideal answer: {ideal_answer}
+User answer: {user_answer}
+"""
+
+    grok_payload = {
+        "model": GROK_MODEL,
+        "messages": [
+            {"role": "system", "content": "Return only valid JSON. No extra text."},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.2,
+        "max_tokens": 200,
+    }
+
+    try:
+        response = requests.post(
+            build_grok_url(),
+            headers={"Authorization": f"Bearer {GROK_API_KEY}"},
+            json=grok_payload,
+            timeout=20,
+        )
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+        parsed = parse_json_object(content) or {}
+        score_raw = parsed.get("score")
+        try:
+            score = float(score_raw)
+        except Exception:
+            score = 0.0
+        score = max(0.0, min(1.0, score))
+        feedback = parsed.get("feedback") if isinstance(parsed.get("feedback"), str) else "Answer evaluated."
+        correct = score >= score_threshold
+        return jsonify({"correct": correct, "score": score, "feedback": feedback})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @app.route("/api/employee-feedback", methods=["POST"])
