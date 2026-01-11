@@ -3008,7 +3008,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 							</Button>
 
 							<p className="text-sm text-slate-500 text-center">
-								Your progress will be saved and tracked individually
+								Your progress will be saved and tracked individually · Build 2026-01-11
 							</p>
 						</>
 					) : (
