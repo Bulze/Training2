@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { CreateData, CreateValue, DataStoreClient, ParseValue } from "@/sdk/database/orm/client";
 import { DataType, SimpleSelector, type Value } from "@/sdk/database/orm/common";
 import Player from "@vimeo/player";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export const Route = createFileRoute("/")({
 	component: App,
@@ -46,20 +47,62 @@ type PayrollEmployee = {
 	sales: number;
 	bonus: number;
 	tips: number;
+	percent?: number;
+	penalty?: number;
 	ppv_sales?: number;
 	dm_sales?: number;
+	daily_sales?: Record<string, number>;
 	clocked_hours?: number;
 	scheduled_hours?: number;
+	sales_per_hour?: number;
 	messages_per_hour?: number;
 	fans_per_hour?: number;
 	response_clock_avg?: number;
 	insights?: string[];
+	compare?: {
+		sales?: PayrollCompareMetric;
+		sales_per_hour?: PayrollCompareMetric;
+		messages_per_hour?: PayrollCompareMetric;
+		response_clock_avg?: PayrollCompareMetric;
+		chat_paid_offers?: PayrollCompareMetric;
+		chat_conversion_rate?: PayrollCompareMetric;
+	};
+	chat_ai?: {
+		why_money?: string[];
+		how_money?: string[];
+		ppv_suggestions?: string[];
+		bait_suggestions?: string[];
+	};
+	chat?: {
+		top_sentences?: Array<{ text: string }>;
+		top_baits?: Array<{ text: string }>;
+	};
+};
+
+type PayrollCompareMetric = {
+	rank?: number;
+	total?: number;
+	percentile?: number;
+};
+
+type PayrollPpvItem = {
+	text: string;
+	purchased?: number;
+	count?: number;
+};
+
+type PayrollPpvDay = {
+	ass?: PayrollPpvItem[];
+	tits?: PayrollPpvItem[];
+	overall?: PayrollPpvItem[];
 };
 
 type PayrollSnapshot = {
 	min_date: string;
 	max_date: string;
 	employees: PayrollEmployee[];
+	ai_status?: string;
+	ppv_day?: PayrollPpvDay;
 };
 
 const payrollClient = DataStoreClient.getInstance();
@@ -1092,24 +1135,139 @@ function PayrollPanel() {
 	const [chatFile, setChatFile] = useState<File | null>(null);
 	const [dateFrom, setDateFrom] = useState("");
 	const [dateTo, setDateTo] = useState("");
+	const [minDate, setMinDate] = useState("");
+	const [maxDate, setMaxDate] = useState("");
+	const [defaultPercent, setDefaultPercent] = useState(10);
 	const [aiEnabled, setAiEnabled] = useState(false);
-	const [status, setStatus] = useState<string | null>(null);
-	const [snapshot, setSnapshot] = useState<PayrollSnapshot | null>(null);
+	const [status, setStatus] = useState("Ready");
+	const [employees, setEmployees] = useState<PayrollEmployee[]>([]);
+	const [selectedEmployeeName, setSelectedEmployeeName] = useState<string | null>(null);
+	const [detailPercent, setDetailPercent] = useState("");
+	const [detailPenalty, setDetailPenalty] = useState("");
+	const [ppvDay, setPpvDay] = useState<PayrollPpvDay>({});
+	const [activeTab, setActiveTab] = useState<"detail" | "ppv">("detail");
+	const [compareA, setCompareA] = useState("");
+	const [compareB, setCompareB] = useState("");
+	const [compareSummary, setCompareSummary] = useState<{
+		why_a_wins?: string[];
+		why_b_lags?: string[];
+		ppv_recommendations?: string[];
+		bait_recommendations?: string[];
+	} | null>(null);
+	const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+	const [aiStatus, setAiStatus] = useState<string | null>(null);
 
 	useEffect(() => {
 		const raw = localStorage.getItem("payroll_snapshot");
-		if (raw) {
-			try {
-				setSnapshot(JSON.parse(raw) as PayrollSnapshot);
-			} catch {
-				setSnapshot(null);
-			}
+		if (!raw) return;
+		try {
+			const parsed = JSON.parse(raw) as PayrollSnapshot;
+			setEmployees(Array.isArray(parsed.employees) ? parsed.employees : []);
+			setMinDate(parsed.min_date || "");
+			setMaxDate(parsed.max_date || "");
+			setPpvDay(parsed.ppv_day || {});
+			setAiStatus(parsed.ai_status || null);
+			const storedUpdated = localStorage.getItem("payroll_snapshot_updated");
+			if (storedUpdated) setUpdatedAt(storedUpdated);
+			setStatus("Loaded stored payroll.");
+			if (!dateFrom && parsed.min_date) setDateFrom(parsed.min_date);
+			if (!dateTo && parsed.max_date) setDateTo(parsed.max_date);
+		} catch {
+			setStatus("Ready");
 		}
-	}, []);
+	}, [dateFrom, dateTo]);
+
+	useEffect(() => {
+		if (!employees.length) {
+			setCompareA("");
+			setCompareB("");
+			return;
+		}
+		setCompareA((prev) => prev || employees[0].employee);
+		setCompareB((prev) => prev || employees[Math.min(1, employees.length - 1)].employee);
+	}, [employees]);
+
+	const computedEmployees = useMemo(() => {
+		return employees.map((emp) => {
+			const percent = Number(emp.percent ?? defaultPercent / 100);
+			const penalty = Number(emp.penalty ?? 0);
+			const sales = Number(emp.sales ?? 0);
+			const bonus = Number(emp.bonus ?? 0);
+			const basePay = sales * percent;
+			const totalPay = basePay + bonus - penalty;
+			return { ...emp, percent, penalty, basePay, totalPay };
+		});
+	}, [employees, defaultPercent]);
+
+	const totals = useMemo(() => {
+		return computedEmployees.reduce(
+			(acc, emp) => {
+				acc.sales += Number(emp.sales ?? 0);
+				acc.bonus += Number(emp.bonus ?? 0);
+				acc.total += Number(emp.totalPay ?? 0);
+				return acc;
+			},
+			{ sales: 0, bonus: 0, total: 0 },
+		);
+	}, [computedEmployees]);
+
+	const sortedEmployees = useMemo(() => {
+		return [...computedEmployees].sort((a, b) => (b.totalPay ?? 0) - (a.totalPay ?? 0));
+	}, [computedEmployees]);
+
+	const selectedEmployee = useMemo(() => {
+		if (!selectedEmployeeName) return null;
+		return computedEmployees.find((emp) => emp.employee === selectedEmployeeName) || null;
+	}, [computedEmployees, selectedEmployeeName]);
+
+	const chartData = useMemo(() => {
+		const daily = selectedEmployee?.daily_sales || {};
+		return Object.keys(daily)
+			.sort()
+			.map((date) => ({ date, sales: Number(daily[date] ?? 0) }));
+	}, [selectedEmployee]);
+
+	useEffect(() => {
+		if (!selectedEmployee) return;
+		const percentValue = Number(selectedEmployee.percent ?? defaultPercent / 100) * 100;
+		setDetailPercent(percentValue.toFixed(2));
+		setDetailPenalty(Number(selectedEmployee.penalty ?? 0).toFixed(2));
+	}, [selectedEmployee, defaultPercent]);
+
+	const formatMoney = (value: number) => `$${value.toFixed(2)}`;
+	const formatMaybe = (value: number | null | undefined, suffix = "") => {
+		if (value === null || value === undefined || Number.isNaN(value)) return "-";
+		return `${value.toFixed(2)}${suffix}`;
+	};
+	const formatRank = (compare?: PayrollCompareMetric) => {
+		if (!compare || compare.rank === undefined || compare.total === undefined) return "-";
+		const pct = compare.percentile === undefined || compare.percentile === null
+			? "-"
+			: `${compare.percentile.toFixed(0)}%`;
+		return `#${compare.rank}/${compare.total} (${pct})`;
+	};
+
+	const renderList = (items?: string[]) => {
+		if (!items || !items.length) {
+			return <li>-</li>;
+		}
+		return items.map((item) => <li key={item}>{item}</li>);
+	};
+
+	const renderPpvList = (items?: PayrollPpvItem[]) => {
+		if (!items || !items.length) {
+			return <li>-</li>;
+		}
+		return items.map((item) => (
+			<li key={`${item.text}-${item.count ?? 0}`}>
+				{item.text} (purchases {item.purchased ?? 0}, offers {item.count ?? 0})
+			</li>
+		));
+	};
 
 	const handleAnalyze = async () => {
 		if (!salesFile) {
-			setStatus("Please select a payroll Excel file.");
+			setStatus("Select a sales Excel file.");
 			return;
 		}
 
@@ -1122,7 +1280,7 @@ function PayrollPanel() {
 		if (dateTo) formData.append("date_to", dateTo);
 		formData.append("ai_enabled", aiEnabled ? "true" : "false");
 
-		setStatus("Analyzing payroll...");
+		setStatus(aiEnabled ? "Loading with AI enabled (may take longer)..." : "Loading...");
 
 		try {
 			const response = await fetch(`${PAYROLL_API_BASE}/api/analyze`, {
@@ -1131,94 +1289,496 @@ function PayrollPanel() {
 			});
 			const data = (await response.json()) as PayrollSnapshot & { error?: string };
 			if (!response.ok) {
-				setStatus(data.error || "Payroll analysis failed.");
+				setStatus(data.error || "Failed to analyze file.");
 				return;
 			}
-			localStorage.setItem("payroll_snapshot", JSON.stringify(data));
-			localStorage.setItem("payroll_snapshot_updated", new Date().toLocaleString());
-			setSnapshot(data);
-			setStatus(`Payroll loaded for ${data.employees.length} employees.`);
+
+			setMinDate(data.min_date || "");
+			setMaxDate(data.max_date || "");
+			if (!dateFrom && data.min_date) setDateFrom(data.min_date);
+			if (!dateTo && data.max_date) setDateTo(data.max_date);
+
+			const percentValue = Number(defaultPercent) || 10;
+			const preparedEmployees = (data.employees || []).map((emp) => ({
+				...emp,
+				percent: percentValue / 100,
+				penalty: 0,
+			}));
+
+			setEmployees(preparedEmployees);
+			setPpvDay(data.ppv_day || {});
+			setAiStatus(data.ai_status || null);
+			setCompareSummary(null);
+			setSelectedEmployeeName(null);
+			setActiveTab("detail");
+
+			const updated = new Date().toLocaleString();
+			setUpdatedAt(updated);
+			localStorage.setItem(
+				"payroll_snapshot",
+				JSON.stringify({
+					...data,
+					employees: preparedEmployees,
+				}),
+			);
+			localStorage.setItem("payroll_snapshot_updated", updated);
+
+			if (data.ai_status === "enabled") {
+				setStatus(`Calculated with AI insights (${preparedEmployees.length} employees).`);
+			} else if (data.ai_status === "no_key") {
+				setStatus(`Calculated without AI (missing key). Employees: ${preparedEmployees.length}.`);
+			} else {
+				setStatus(`Calculated. Employees: ${preparedEmployees.length}.`);
+			}
 		} catch (error) {
-			setStatus(`Payroll request failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+			setStatus(`Request failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+		}
+	};
+
+	const handleDefaultPercentChange = (value: number) => {
+		setDefaultPercent(value);
+		if (Number.isNaN(value)) return;
+		setEmployees((prev) =>
+			prev.map((emp) => ({
+				...emp,
+				percent: value / 100,
+			})),
+		);
+		if (selectedEmployeeName) {
+			setDetailPercent(value.toFixed(2));
+		}
+	};
+
+	const handleApply = () => {
+		if (!selectedEmployeeName) return;
+		const percentValue = parseFloat(detailPercent);
+		const penaltyValue = parseFloat(detailPenalty);
+		setEmployees((prev) =>
+			prev.map((emp) => {
+				if (emp.employee !== selectedEmployeeName) return emp;
+				return {
+					...emp,
+					percent: Number.isNaN(percentValue) ? emp.percent : percentValue / 100,
+					penalty: Number.isNaN(penaltyValue) ? emp.penalty : penaltyValue,
+				};
+			}),
+		);
+	};
+
+	const handleAiTest = async () => {
+		setStatus("Testing AI...");
+		try {
+			const response = await fetch(`${PAYROLL_API_BASE}/api/ai-test`, { method: "POST" });
+			const data = (await response.json()) as { ok?: boolean; error?: string };
+			if (!response.ok || !data.ok) {
+				setStatus(`AI test failed: ${data.error || "unknown error"}`);
+				return;
+			}
+			setStatus("AI test OK.");
+		} catch (error) {
+			setStatus(`AI test failed: ${error instanceof Error ? error.message : "unknown error"}`);
+		}
+	};
+
+	const handleCompare = async () => {
+		if (!compareA || !compareB) return;
+		const userA = employees.find((e) => e.employee === compareA);
+		const userB = employees.find((e) => e.employee === compareB);
+		if (!userA || !userB) return;
+
+		const payload = {
+			user_a: userA,
+			user_b: userB,
+			ai_enabled: aiEnabled,
+		};
+
+		setStatus("Comparing...");
+
+		try {
+			const response = await fetch(`${PAYROLL_API_BASE}/api/compare`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(payload),
+			});
+			const data = (await response.json()) as { summary?: Record<string, string[]>; error?: string };
+			if (!response.ok) {
+				setStatus(data.error || "Compare failed.");
+				return;
+			}
+			setCompareSummary(data.summary || {});
+			setStatus("Compare complete.");
+		} catch (error) {
+			setStatus(`Compare failed: ${error instanceof Error ? error.message : "unknown error"}`);
 		}
 	};
 
 	const clearSnapshot = () => {
 		localStorage.removeItem("payroll_snapshot");
 		localStorage.removeItem("payroll_snapshot_updated");
-		setSnapshot(null);
-		setStatus("Stored payroll cleared.");
+		setEmployees([]);
+		setSelectedEmployeeName(null);
+		setPpvDay({});
+		setCompareSummary(null);
+		setUpdatedAt(null);
+		setAiStatus(null);
+		setStatus("Cleared.");
+		setActiveTab("detail");
 	};
 
 	return (
-		<Card className="bg-slate-900 border-slate-800">
-			<CardHeader>
-				<CardTitle className="text-slate-100">Payroll Upload</CardTitle>
-				<CardDescription className="text-slate-400">
-					Load payroll from the Payroll app API and share results with chatter dashboards
-				</CardDescription>
-			</CardHeader>
-			<CardContent className="space-y-6">
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<div className="space-y-2">
-						<Label>Sales Excel</Label>
-						<Input
+		<div className="payroll-app">
+			<header className="header">
+				<div>
+					<h1>Payroll Studio</h1>
+					<p>Modern payroll analytics for chatter teams.</p>
+				</div>
+				<div className="status">{status || "Ready"}</div>
+			</header>
+
+			<section className="panel controls">
+				<div className="field wide">
+					<label>Sales Excel</label>
+					<div className="file-row">
+						<input
 							type="file"
 							accept=".xlsx,.xlsm,.xltx,.xltm"
 							onChange={(e) => setSalesFile(e.target.files?.[0] || null)}
 						/>
+						<button type="button" className="btn accent" onClick={handleAnalyze}>
+							Load + Calculate
+						</button>
 					</div>
-					<div className="space-y-2">
-						<Label>Chats Excel (optional)</Label>
-						<Input
+				</div>
+				<div className="field wide">
+					<label>Chats Excel (optional)</label>
+					<div className="file-row">
+						<input
 							type="file"
 							accept=".xlsx,.xlsm,.xltx,.xltm"
 							onChange={(e) => setChatFile(e.target.files?.[0] || null)}
 						/>
 					</div>
-					<div className="space-y-2">
-						<Label>Date From</Label>
-						<Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-					</div>
-					<div className="space-y-2">
-						<Label>Date To</Label>
-						<Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+				</div>
+				<div className="field">
+					<label>Date from</label>
+					<input
+						type="date"
+						min={minDate || undefined}
+						max={maxDate || undefined}
+						value={dateFrom}
+						onChange={(e) => setDateFrom(e.target.value)}
+					/>
+				</div>
+				<div className="field">
+					<label>Date to</label>
+					<input
+						type="date"
+						min={minDate || undefined}
+						max={maxDate || undefined}
+						value={dateTo}
+						onChange={(e) => setDateTo(e.target.value)}
+					/>
+				</div>
+				<div className="field">
+					<label>Default %</label>
+					<input
+						type="number"
+						value={defaultPercent}
+						min={0}
+						step={0.1}
+						onChange={(e) => handleDefaultPercentChange(Number(e.target.value))}
+					/>
+				</div>
+				<div className="field actions">
+					<label>AI Insights</label>
+					<div className="ai-row">
+						<label className="switch">
+							<input
+								type="checkbox"
+								checked={aiEnabled}
+								onChange={(e) => setAiEnabled(e.target.checked)}
+							/>
+							<span className="slider" />
+						</label>
+						<button type="button" className="btn pink" onClick={handleAiTest}>
+							Test AI
+						</button>
 					</div>
 				</div>
-
-				<div className="flex items-center gap-4">
-					<Label className="text-slate-300">AI Insights</Label>
-					<Button
-						variant={aiEnabled ? "default" : "outline"}
-						size="sm"
-						onClick={() => setAiEnabled((prev) => !prev)}
-					>
-						{aiEnabled ? "Enabled" : "Disabled"}
-					</Button>
+				<div className="field actions">
+					<button type="button" className="btn ghost" onClick={clearSnapshot}>
+						Clear
+					</button>
 				</div>
+			</section>
 
-				<div className="flex flex-col md:flex-row gap-3">
-					<Button onClick={handleAnalyze} className="bg-emerald-600 hover:bg-emerald-700">
-						Load Payroll
-					</Button>
-					<Button variant="outline" onClick={clearSnapshot}>
-						Clear Stored Payroll
-					</Button>
+			<section className="summary">
+				<div className="card">
+					<span>Total sales</span>
+					<strong>{formatMoney(totals.sales)}</strong>
 				</div>
+				<div className="card">
+					<span>Total bonus</span>
+					<strong>{formatMoney(totals.bonus)}</strong>
+				</div>
+				<div className="card">
+					<span>Total payout</span>
+					<strong>{formatMoney(totals.total)}</strong>
+				</div>
+			</section>
 
-				{status && (
-					<Alert className="bg-slate-800 border-slate-700">
-						<AlertDescription className="text-slate-200">{status}</AlertDescription>
-					</Alert>
-				)}
+			<div className="main-tabs">
+				<button
+					type="button"
+					className={cn("tab-btn", activeTab === "detail" && "active")}
+					onClick={() => setActiveTab("detail")}
+				>
+					Chatter detail
+				</button>
+				<button
+					type="button"
+					className={cn("tab-btn", activeTab === "ppv" && "active")}
+					onClick={() => setActiveTab("ppv")}
+				>
+					PPV of the day
+				</button>
+			</div>
 
-				{snapshot && (
-					<div className="text-sm text-slate-400">
-						Loaded range: {snapshot.min_date} → {snapshot.max_date} · Employees: {snapshot.employees.length}
+			<section className={cn("panel grid tab-panel", activeTab === "detail" && "active")}>
+				<div className="table-wrap">
+					<table>
+						<thead>
+							<tr>
+								<th>Employee</th>
+								<th>Percent</th>
+								<th>Penalty</th>
+								<th>Sales</th>
+								<th>Bonus</th>
+								<th>Base Pay</th>
+								<th>Total Pay</th>
+							</tr>
+						</thead>
+						<tbody>
+							{sortedEmployees.map((emp) => (
+								<tr key={emp.employee} onClick={() => setSelectedEmployeeName(emp.employee)}>
+									<td>{emp.employee}</td>
+									<td>{((emp.percent ?? 0) * 100).toFixed(2)}%</td>
+									<td>{formatMoney(Number(emp.penalty ?? 0))}</td>
+									<td>{formatMoney(Number(emp.sales ?? 0))}</td>
+									<td>{formatMoney(Number(emp.bonus ?? 0))}</td>
+									<td>{formatMoney(Number(emp.basePay ?? 0))}</td>
+									<td>{formatMoney(Number(emp.totalPay ?? 0))}</td>
+								</tr>
+							))}
+							{sortedEmployees.length === 0 && (
+								<tr>
+									<td colSpan={7}>No payroll data loaded.</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<aside className="detail">
+					<h2>{selectedEmployee?.employee || "Select employee"}</h2>
+					<div className="detail-fields">
+						<div>
+							<label>Percent</label>
+							<input
+								type="number"
+								min={0}
+								step={0.1}
+								value={detailPercent}
+								onChange={(e) => setDetailPercent(e.target.value)}
+							/>
+						</div>
+						<div>
+							<label>Penalty</label>
+							<input
+								type="number"
+								min={0}
+								step={0.01}
+								value={detailPenalty}
+								onChange={(e) => setDetailPenalty(e.target.value)}
+							/>
+						</div>
+						<button type="button" className="btn accent" onClick={handleApply}>
+							Apply
+						</button>
 					</div>
-				)}
-			</CardContent>
-		</Card>
+					<div className="stats">
+						<div>
+							<span>Clocked hours</span>
+							<strong>{formatMaybe(selectedEmployee?.clocked_hours, "h")}</strong>
+						</div>
+						<div>
+							<span>Scheduled hours</span>
+							<strong>{formatMaybe(selectedEmployee?.scheduled_hours, "h")}</strong>
+						</div>
+						<div>
+							<span>Sales/hr</span>
+							<strong>{formatMaybe(selectedEmployee?.sales_per_hour, "$")}</strong>
+						</div>
+						<div>
+							<span>Messages/hr</span>
+							<strong>{formatMaybe(selectedEmployee?.messages_per_hour)}</strong>
+						</div>
+						<div>
+							<span>Fans/hr</span>
+							<strong>{formatMaybe(selectedEmployee?.fans_per_hour)}</strong>
+						</div>
+						<div>
+							<span>Response (clocked)</span>
+							<strong>{formatMaybe(selectedEmployee?.response_clock_avg, "m")}</strong>
+						</div>
+					</div>
+					<div className="chart-card">
+						{chartData.length > 0 ? (
+							<ResponsiveContainer width="100%" height={180}>
+								<LineChart data={chartData}>
+									<CartesianGrid stroke="rgba(31,42,68,0.4)" />
+									<XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 11 }} />
+									<YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
+									<Tooltip
+										contentStyle={{
+											background: "#0f172a",
+											border: "1px solid #1f2a44",
+											borderRadius: "10px",
+											color: "#e5e7eb",
+										}}
+									/>
+									<Line
+										type="monotone"
+										dataKey="sales"
+										stroke="#22d3ee"
+										strokeWidth={2}
+										dot={false}
+										fill="rgba(34, 211, 238, 0.2)"
+									/>
+								</LineChart>
+							</ResponsiveContainer>
+						) : (
+							<div className="text-sm text-slate-400">No chart data</div>
+						)}
+					</div>
+					<div className="compare">
+						<h3>Chatter comparison</h3>
+						<div className="compare-grid">
+							<div>
+								<span>Sales rank</span>
+								<strong>{formatRank(selectedEmployee?.compare?.sales)}</strong>
+							</div>
+							<div>
+								<span>Sales/hr rank</span>
+								<strong>{formatRank(selectedEmployee?.compare?.sales_per_hour)}</strong>
+							</div>
+							<div>
+								<span>Msgs/hr rank</span>
+								<strong>{formatRank(selectedEmployee?.compare?.messages_per_hour)}</strong>
+							</div>
+							<div>
+								<span>Reply time rank</span>
+								<strong>{formatRank(selectedEmployee?.compare?.response_clock_avg)}</strong>
+							</div>
+							<div>
+								<span>Paid offers rank</span>
+								<strong>{formatRank(selectedEmployee?.compare?.chat_paid_offers)}</strong>
+							</div>
+							<div>
+								<span>Chat CVR rank</span>
+								<strong>{formatRank(selectedEmployee?.compare?.chat_conversion_rate)}</strong>
+							</div>
+						</div>
+					</div>
+					<div className="chat-analysis">
+						<div className="chat-columns">
+							<div>
+								<h4>Why they make money</h4>
+								<ul>{renderList(selectedEmployee?.chat_ai?.why_money)}</ul>
+								<h4>How they make money</h4>
+								<ul>{renderList(selectedEmployee?.chat_ai?.how_money)}</ul>
+								<h4>AI PPV suggestions</h4>
+								<ul>{renderList(selectedEmployee?.chat_ai?.ppv_suggestions)}</ul>
+								<h4>AI bait suggestions</h4>
+								<ul>{renderList(selectedEmployee?.chat_ai?.bait_suggestions)}</ul>
+							</div>
+							<div>
+								<h4>Most used sentences</h4>
+								<ul>{renderList(selectedEmployee?.chat?.top_sentences?.map((x) => x.text))}</ul>
+								<h4>Most used baits</h4>
+								<ul>{renderList(selectedEmployee?.chat?.top_baits?.map((x) => x.text))}</ul>
+							</div>
+						</div>
+					</div>
+					<div className="compare-panel">
+						<h3>Compare two chatters</h3>
+						<div className="compare-selects">
+							<div>
+								<label>User A</label>
+								<select value={compareA} onChange={(e) => setCompareA(e.target.value)}>
+									{employees.map((emp) => (
+										<option key={`a-${emp.employee}`} value={emp.employee}>
+											{emp.employee}
+										</option>
+									))}
+								</select>
+							</div>
+							<div>
+								<label>User B</label>
+								<select value={compareB} onChange={(e) => setCompareB(e.target.value)}>
+									{employees.map((emp) => (
+										<option key={`b-${emp.employee}`} value={emp.employee}>
+											{emp.employee}
+										</option>
+									))}
+								</select>
+							</div>
+							<button type="button" className="btn accent" onClick={handleCompare}>
+								Compare
+							</button>
+						</div>
+						<div className="compare-results">
+							<h4>Why A makes more</h4>
+							<ul>{renderList(compareSummary?.why_a_wins)}</ul>
+							<h4>Why B makes less</h4>
+							<ul>{renderList(compareSummary?.why_b_lags)}</ul>
+							<h4>PPV recommendations for B</h4>
+							<ul>{renderList(compareSummary?.ppv_recommendations)}</ul>
+							<h4>Bait recommendations for B</h4>
+							<ul>{renderList(compareSummary?.bait_recommendations)}</ul>
+						</div>
+					</div>
+					<div className="insights">
+						<h3>Insights</h3>
+						<ul>{renderList(selectedEmployee?.insights)}</ul>
+					</div>
+					{updatedAt && (
+						<p className="text-xs text-slate-500">
+							Last updated: {updatedAt} {aiStatus ? `(${aiStatus})` : ""}
+						</p>
+					)}
+				</aside>
+			</section>
+
+			<section className={cn("panel tab-panel", activeTab === "ppv" && "active")}>
+				<div className="ppv-panel">
+					<h3>PPV of the day</h3>
+					<div className="ppv-columns">
+						<div>
+							<h4>Ass PPV</h4>
+							<ul>{renderPpvList(ppvDay.ass)}</ul>
+						</div>
+						<div>
+							<h4>Tits PPV</h4>
+							<ul>{renderPpvList(ppvDay.tits)}</ul>
+						</div>
+						<div>
+							<h4>Best overall baits</h4>
+							<ul>{renderPpvList(ppvDay.overall)}</ul>
+						</div>
+					</div>
+				</div>
+			</section>
+		</div>
 	);
 }
 
@@ -3068,3 +3628,4 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 		</div>
 	);
 }
+

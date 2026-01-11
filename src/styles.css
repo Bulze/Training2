@@ -11,6 +11,7 @@ body {
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 	background: radial-gradient(circle at top, #111b34 0%, #0a0f1f 55%);
+	color-scheme: dark;
 }
 
 code {
@@ -27,7 +28,7 @@ code {
 	--popover-foreground: #e5e7eb;
 	--primary: #2dd4bf;
 	--primary-foreground: #02121a;
-	--secondary: #111827;
+	--secondary: #0f172a;
 	--secondary-foreground: #e5e7eb;
 	--muted: #1f2a44;
 	--muted-foreground: #94a3b8;
@@ -63,7 +64,7 @@ code {
 	--popover-foreground: #e5e7eb;
 	--primary: #2dd4bf;
 	--primary-foreground: #02121a;
-	--secondary: #111827;
+	--secondary: #0f172a;
 	--secondary-foreground: #e5e7eb;
 	--muted: #1f2a44;
 	--muted-foreground: #94a3b8;
@@ -134,5 +135,433 @@ code {
 	}
 	body {
 		@apply bg-background text-foreground;
+	}
+}
+
+.payroll-app,
+.payroll-app * {
+	box-sizing: border-box;
+}
+
+.payroll-app {
+	max-width: 1280px;
+	margin: 0 auto;
+	padding: 32px 24px 40px;
+}
+
+.payroll-app .header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 16px;
+	margin-bottom: 20px;
+}
+
+.payroll-app .header h1 {
+	margin: 0 0 8px;
+	font-size: 28px;
+}
+
+.payroll-app .header p {
+	margin: 0;
+	color: var(--muted-foreground);
+}
+
+.payroll-app .status {
+	padding: 8px 14px;
+	background: rgba(45, 212, 191, 0.12);
+	border: 1px solid rgba(45, 212, 191, 0.4);
+	border-radius: 999px;
+	font-size: 13px;
+	color: var(--primary);
+}
+
+.payroll-app .panel {
+	background: var(--card);
+	border: 1px solid var(--border);
+	border-radius: 18px;
+	box-shadow: 0 18px 40px rgba(6, 10, 25, 0.55);
+}
+
+.payroll-app .controls {
+	display: grid;
+	grid-template-columns: 2fr repeat(3, 1fr) auto;
+	gap: 16px;
+	padding: 20px;
+	align-items: end;
+}
+
+.payroll-app .field.wide {
+	grid-column: span 2;
+}
+
+.payroll-app .field label {
+	display: block;
+	font-size: 12px;
+	color: var(--muted-foreground);
+	margin-bottom: 8px;
+}
+
+.payroll-app .field input[type="date"],
+.payroll-app .field input[type="number"],
+.payroll-app .field input[type="file"],
+.payroll-app .field select {
+	width: 100%;
+	padding: 10px 12px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: var(--input);
+	color: var(--foreground);
+}
+
+.payroll-app .file-row {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+}
+
+.payroll-app .file-row input {
+	flex: 1;
+}
+
+.payroll-app .btn {
+	border: none;
+	padding: 10px 18px;
+	border-radius: 12px;
+	cursor: pointer;
+	font-weight: 600;
+	transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.payroll-app .btn.accent {
+	background: linear-gradient(120deg, #2dd4bf, #22d3ee);
+	color: #02121a;
+	box-shadow: 0 12px 24px rgba(45, 212, 191, 0.25);
+}
+
+.payroll-app .btn.ghost {
+	background: transparent;
+	color: var(--foreground);
+	border: 1px solid var(--border);
+}
+
+.payroll-app .btn.pink {
+	background: linear-gradient(120deg, #fb7185, #f472b6);
+	color: #1a0610;
+	box-shadow: 0 12px 24px rgba(244, 114, 182, 0.25);
+}
+
+.payroll-app .ai-row {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+}
+
+.payroll-app .switch {
+	position: relative;
+	display: inline-block;
+	width: 44px;
+	height: 24px;
+}
+
+.payroll-app .switch input {
+	opacity: 0;
+	width: 0;
+	height: 0;
+}
+
+.payroll-app .slider {
+	position: absolute;
+	cursor: pointer;
+	inset: 0;
+	background-color: #1f2a44;
+	transition: 0.2s;
+	border-radius: 999px;
+}
+
+.payroll-app .slider:before {
+	position: absolute;
+	content: "";
+	height: 18px;
+	width: 18px;
+	left: 3px;
+	bottom: 3px;
+	background-color: #fff;
+	transition: 0.2s;
+	border-radius: 50%;
+}
+
+.payroll-app .switch input:checked + .slider {
+	background-color: #f472b6;
+}
+
+.payroll-app .switch input:checked + .slider:before {
+	transform: translateX(20px);
+}
+
+.payroll-app .btn:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+}
+
+.payroll-app .summary {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 16px;
+	margin: 18px 0 20px;
+}
+
+.payroll-app .card {
+	background: linear-gradient(160deg, #101a2f 0%, #0c1429 100%);
+	border: 1px solid var(--border);
+	border-radius: 18px;
+	padding: 18px;
+	box-shadow: 0 18px 40px rgba(6, 10, 25, 0.55);
+}
+
+.payroll-app .card span {
+	font-size: 12px;
+	color: var(--muted-foreground);
+}
+
+.payroll-app .card strong {
+	display: block;
+	margin-top: 10px;
+	font-size: 22px;
+}
+
+.payroll-app .grid {
+	display: grid;
+	grid-template-columns: 2fr 1fr;
+	gap: 20px;
+	padding: 20px;
+}
+
+.payroll-app .main-tabs {
+	display: flex;
+	gap: 8px;
+	margin: 18px 0 10px;
+}
+
+.payroll-app .table-wrap {
+	overflow: hidden;
+	border-radius: 16px;
+	border: 1px solid var(--border);
+}
+
+.payroll-app table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+}
+
+.payroll-app thead {
+	background: #101a2f;
+}
+
+.payroll-app th,
+.payroll-app td {
+	padding: 12px 14px;
+	border-bottom: 1px solid rgba(31, 42, 68, 0.7);
+}
+
+.payroll-app tbody tr:nth-child(odd) {
+	background: rgba(11, 16, 32, 0.6);
+}
+
+.payroll-app tbody tr:hover {
+	background: rgba(34, 211, 238, 0.12);
+}
+
+.payroll-app .detail h2 {
+	margin-top: 0;
+}
+
+.payroll-app .detail-fields {
+	display: grid;
+	grid-template-columns: 1fr 1fr auto;
+	gap: 12px;
+	align-items: end;
+	margin: 12px 0 18px;
+}
+
+.payroll-app .detail-fields input {
+	width: 100%;
+	padding: 10px 12px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: var(--input);
+	color: var(--foreground);
+}
+
+.payroll-app .stats {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+	margin-bottom: 16px;
+}
+
+.payroll-app .stats div {
+	background: rgba(15, 23, 42, 0.75);
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	padding: 10px 12px;
+}
+
+.payroll-app .stats span {
+	display: block;
+	font-size: 11px;
+	color: var(--muted-foreground);
+}
+
+.payroll-app .stats strong {
+	font-size: 14px;
+}
+
+.payroll-app .chart-card,
+.payroll-app .compare,
+.payroll-app .chat-analysis,
+.payroll-app .compare-panel,
+.payroll-app .ppv-panel {
+	background: rgba(15, 23, 42, 0.75);
+	border: 1px solid var(--border);
+	border-radius: 14px;
+	padding: 12px;
+	margin-bottom: 16px;
+}
+
+.payroll-app .tab-btn {
+	border: 1px solid var(--border);
+	background: rgba(15, 23, 42, 0.75);
+	color: var(--foreground);
+	padding: 8px 12px;
+	border-radius: 999px;
+	cursor: pointer;
+	font-size: 12px;
+}
+
+.payroll-app .tab-btn.active {
+	background: linear-gradient(120deg, #2dd4bf, #22d3ee);
+	color: #02121a;
+	border-color: transparent;
+}
+
+.payroll-app .tab-panel {
+	display: none;
+}
+
+.payroll-app .tab-panel.active {
+	display: block;
+}
+
+.payroll-app .ppv-panel h3 {
+	margin: 0 0 10px;
+}
+
+.payroll-app .ppv-columns {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 12px;
+}
+
+.payroll-app .ppv-panel h4 {
+	margin: 8px 0 6px;
+	font-size: 13px;
+}
+
+.payroll-app .ppv-panel ul,
+.payroll-app .compare-results ul,
+.payroll-app .chat-analysis ul,
+.payroll-app .insights ul {
+	margin: 0;
+	padding-left: 18px;
+	color: var(--muted-foreground);
+	line-height: 1.5;
+}
+
+.payroll-app .compare-panel h3,
+.payroll-app .compare h3,
+.payroll-app .chat-analysis h3,
+.payroll-app .insights h3 {
+	margin: 0 0 10px;
+}
+
+.payroll-app .compare-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 10px;
+}
+
+.payroll-app .compare-grid div {
+	background: rgba(11, 16, 32, 0.6);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	padding: 8px 10px;
+}
+
+.payroll-app .compare-grid span {
+	display: block;
+	font-size: 11px;
+	color: var(--muted-foreground);
+}
+
+.payroll-app .compare-grid strong {
+	font-size: 13px;
+}
+
+.payroll-app .chat-columns {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+}
+
+.payroll-app .chat-analysis h4,
+.payroll-app .compare-results h4 {
+	margin: 8px 0 6px;
+	font-size: 13px;
+}
+
+.payroll-app .compare-selects {
+	display: grid;
+	grid-template-columns: 1fr 1fr auto;
+	gap: 10px;
+	align-items: end;
+	margin-bottom: 12px;
+}
+
+.payroll-app .compare-selects label {
+	display: block;
+	font-size: 12px;
+	color: var(--muted-foreground);
+	margin-bottom: 6px;
+}
+
+.payroll-app .compare-selects select {
+	width: 100%;
+	padding: 10px 12px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: var(--input);
+	color: var(--foreground);
+}
+
+@media (max-width: 1100px) {
+	.payroll-app .controls {
+		grid-template-columns: 1fr;
+	}
+	.payroll-app .grid {
+		grid-template-columns: 1fr;
+	}
+	.payroll-app .detail-fields {
+		grid-template-columns: 1fr;
+	}
+	.payroll-app .chat-columns {
+		grid-template-columns: 1fr;
+	}
+	.payroll-app .compare-selects {
+		grid-template-columns: 1fr;
+	}
+	.payroll-app .ppv-columns {
+		grid-template-columns: 1fr;
 	}
 }
