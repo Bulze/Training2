@@ -364,6 +364,7 @@ def extract_stats(file_stream, date_from=None, date_to=None):
 
     stats = {}
     per_day = {}
+    per_day_bonus = {}
     shifts = {}
 
     for r, range_start, range_end in rows:
@@ -384,7 +385,6 @@ def extract_stats(file_stream, date_from=None, date_to=None):
         sales_val = ws.cell(r, idx[SALES_HEADER]).value
         sales_raw = parse_money(sales_val)
         sales = sales_raw * fraction
-        bonus = math.floor(sales / 500.0) * 15.0
 
         if emp not in stats:
             stats[emp] = {
@@ -405,10 +405,10 @@ def extract_stats(file_stream, date_from=None, date_to=None):
                 "response_sched_vals": [],
             }
             per_day[emp] = {}
+            per_day_bonus[emp] = {}
             shifts[emp] = []
 
         stats[emp]["sales"] += sales
-        stats[emp]["bonus"] += bonus
 
         if TIPS_HEADER in idx:
             stats[emp]["tips"] += parse_money(ws.cell(r, idx[TIPS_HEADER]).value) * fraction
@@ -451,7 +451,6 @@ def extract_stats(file_stream, date_from=None, date_to=None):
                 stats[emp]["response_sched_vals"].append(v)
 
         sales_per_day = sales / overlap_days if overlap_days else sales
-        bonus_per_day = bonus / overlap_days if overlap_days else bonus
         for day in iter_days(overlap_start, overlap_end):
             day_key = day.isoformat()
             per_day[emp].setdefault(day_key, 0.0)
@@ -462,9 +461,19 @@ def extract_stats(file_stream, date_from=None, date_to=None):
                     "group": ws.cell(r, idx[GROUP_HEADER]).value if GROUP_HEADER in idx else None,
                     "creators": ws.cell(r, idx[CREATORS_HEADER]).value if CREATORS_HEADER in idx else None,
                     "sales": sales_per_day,
-                    "bonus": bonus_per_day,
+                    "bonus": 0.0,
                 }
             )
+
+    # Bonus is computed per employee per day based on total daily sales (crossing $500 before midnight counts that day).
+    for emp, daily in per_day.items():
+        total_bonus = 0.0
+        for day_key, day_sales in daily.items():
+            day_bonus = math.floor(day_sales / 500.0) * 15.0
+            per_day_bonus[emp][day_key] = day_bonus
+            total_bonus += day_bonus
+        if emp in stats:
+            stats[emp]["bonus"] = total_bonus
 
     result = []
     for emp, data in stats.items():
@@ -513,6 +522,7 @@ def extract_stats(file_stream, date_from=None, date_to=None):
                 "response_clock_avg": avg_resp_clock,
                 "response_sched_avg": avg_resp_sched,
                 "daily_sales": per_day.get(emp, {}),
+                "daily_bonus": per_day_bonus.get(emp, {}),
                 "shifts": shifts.get(emp, []),
             }
         )

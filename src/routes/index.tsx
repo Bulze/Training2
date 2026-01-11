@@ -63,6 +63,7 @@ type PayrollEmployee = {
 	sales: number;
 	bonus: number;
 	tips: number;
+	daily_bonus?: Record<string, number>;
 	shifts?: Array<{
 		date: string;
 		sales?: number;
@@ -2431,9 +2432,15 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				const dateKey = String(shift.date || "").slice(0, 10);
 				if (!dateKey) continue;
 				const shiftSales = Number(shift.sales ?? 0);
-				const shiftBonus = Number(shift.bonus ?? 0);
 				const prev = byDate.get(dateKey) ?? { sales: 0, bonus: 0 };
-				byDate.set(dateKey, { sales: prev.sales + shiftSales, bonus: prev.bonus + shiftBonus });
+				byDate.set(dateKey, { sales: prev.sales + shiftSales, bonus: prev.bonus });
+			}
+			const bonusByDay = employee?.daily_bonus || {};
+			for (const [dateKey, dayBonus] of Object.entries(bonusByDay)) {
+				const key = String(dateKey || "").slice(0, 10);
+				if (!key) continue;
+				const prev = byDate.get(key) ?? { sales: 0, bonus: 0 };
+				byDate.set(key, { sales: prev.sales, bonus: prev.bonus + Number(dayBonus ?? 0) });
 			}
 		} else {
 			const daily = employee?.daily_sales || {};
@@ -2442,6 +2449,13 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				if (!dateKey) continue;
 				const prev = byDate.get(dateKey) ?? { sales: 0, bonus: 0 };
 				byDate.set(dateKey, { sales: prev.sales + Number(value ?? 0), bonus: prev.bonus });
+			}
+			const bonusByDay = employee?.daily_bonus || {};
+			for (const [dateKeyRaw, dayBonus] of Object.entries(bonusByDay)) {
+				const dateKey = String(dateKeyRaw || "").slice(0, 10);
+				if (!dateKey) continue;
+				const prev = byDate.get(dateKey) ?? { sales: 0, bonus: 0 };
+				byDate.set(dateKey, { sales: prev.sales, bonus: prev.bonus + Number(dayBonus ?? 0) });
 			}
 		}
 
