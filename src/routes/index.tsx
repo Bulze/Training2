@@ -445,10 +445,10 @@ function AdminPanel() {
 }
 
 function ManagementPanel() {
-	const [activeTab, setActiveTab] = useState<"users" | "payroll">("users");
+	const [activeTab, setActiveTab] = useState<"users" | "payroll" | "roles">("users");
 
 	return (
-		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "payroll")}>
+		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "payroll" | "roles")}>
 			<div className="grid grid-cols-1 xl:grid-cols-[220px_1fr] gap-6">
 				<Card className="bg-slate-900 border-slate-800 h-fit">
 					<CardHeader>
@@ -465,6 +465,9 @@ function ManagementPanel() {
 							<TabsTrigger value="payroll" className="justify-start w-full flex-none">
 								Payroll
 							</TabsTrigger>
+							<TabsTrigger value="roles" className="justify-start w-full flex-none">
+								Roles & inflow
+							</TabsTrigger>
 						</TabsList>
 					</CardContent>
 				</Card>
@@ -476,6 +479,9 @@ function ManagementPanel() {
 					<TabsContent value="payroll" className="mt-0">
 						<PayrollPanel />
 					</TabsContent>
+					<TabsContent value="roles" className="mt-0">
+						<TrainingRolesPanel />
+					</TabsContent>
 				</div>
 			</div>
 		</Tabs>
@@ -483,10 +489,10 @@ function ManagementPanel() {
 }
 
 function TrainingPanel() {
-	const [activeTab, setActiveTab] = useState<"create" | "manage" | "roles" | "submissions">("create");
+	const [activeTab, setActiveTab] = useState<"create" | "manage" | "submissions">("create");
 
 	return (
-		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "create" | "manage" | "roles" | "submissions")}>
+		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "create" | "manage" | "submissions")}>
 			<div className="grid grid-cols-1 xl:grid-cols-[220px_1fr] gap-6">
 				<Card className="bg-slate-900 border-slate-800 h-fit">
 					<CardHeader>
@@ -503,9 +509,6 @@ function TrainingPanel() {
 							<TabsTrigger value="manage" className="justify-start w-full flex-none">
 								Manage tests
 							</TabsTrigger>
-							<TabsTrigger value="roles" className="justify-start w-full flex-none">
-								Roles & inflow
-							</TabsTrigger>
 							<TabsTrigger value="submissions" className="justify-start w-full flex-none">
 								Submissions
 							</TabsTrigger>
@@ -519,9 +522,6 @@ function TrainingPanel() {
 					</TabsContent>
 					<TabsContent value="manage" className="mt-0">
 						<ManageTestsPanel />
-					</TabsContent>
-					<TabsContent value="roles" className="mt-0">
-						<TrainingRolesPanel />
 					</TabsContent>
 					<TabsContent value="submissions" className="mt-0">
 						<AllSubmissionsPanel />
