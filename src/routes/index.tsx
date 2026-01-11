@@ -1204,24 +1204,38 @@ function PayrollPanel() {
 		return `${compact.slice(0, limit)}…`;
 	};
 
+	const applySnapshot = (snapshot: PayrollSnapshot, updatedAtIso: string | null) => {
+		setEmployees(Array.isArray(snapshot.employees) ? snapshot.employees : []);
+		setMinDate(snapshot.min_date || "");
+		setMaxDate(snapshot.max_date || "");
+		setPpvDay(snapshot.ppv_day || {});
+		setAiStatus(snapshot.ai_status || null);
+		setUpdatedAt(updatedAtIso);
+		setDateFrom((prev) => prev || snapshot.min_date || "");
+		setDateTo((prev) => prev || snapshot.max_date || "");
+	};
+
 	useEffect(() => {
-		const raw = localStorage.getItem("payroll_snapshot");
-		if (!raw) return;
-		try {
-			const parsed = JSON.parse(raw) as PayrollSnapshot;
-			setEmployees(Array.isArray(parsed.employees) ? parsed.employees : []);
-			setMinDate(parsed.min_date || "");
-			setMaxDate(parsed.max_date || "");
-			setPpvDay(parsed.ppv_day || {});
-			setAiStatus(parsed.ai_status || null);
-			const storedUpdated = localStorage.getItem("payroll_snapshot_updated");
-			if (storedUpdated) setUpdatedAt(storedUpdated);
-			setStatus("Loaded stored payroll.");
-			setDateFrom((prev) => prev || parsed.min_date || "");
-			setDateTo((prev) => prev || parsed.max_date || "");
-		} catch {
-			setStatus("Ready");
-		}
+		let cancelled = false;
+		const load = async () => {
+			try {
+				setStatus("Loading stored payroll…");
+				const stored = await fetchPayrollSnapshot();
+				if (cancelled) return;
+				if (stored.snapshot) {
+					applySnapshot(stored.snapshot, stored.updatedAt);
+					setStatus("Loaded stored payroll.");
+					return;
+				}
+				setStatus("Ready");
+			} catch {
+				if (!cancelled) setStatus("Ready");
+			}
+		};
+		load();
+		return () => {
+			cancelled = true;
+		};
 	}, []);
 
 	useEffect(() => {
@@ -1396,16 +1410,11 @@ function PayrollPanel() {
 			setSelectedEmployeeName(null);
 			setActiveTab("detail");
 
-			const updated = new Date().toLocaleString();
-			setUpdatedAt(updated);
-			localStorage.setItem(
-				"payroll_snapshot",
-				JSON.stringify({
-					...data,
-					employees: preparedEmployees,
-				}),
-			);
-			localStorage.setItem("payroll_snapshot_updated", updated);
+			const updatedIso = await savePayrollSnapshot({
+				...data,
+				employees: preparedEmployees,
+			});
+			setUpdatedAt(updatedIso);
 
 			if (data.ai_status === "enabled") {
 				setStatus(`Calculated with AI insights (${preparedEmployees.length} employees).`);
@@ -1515,8 +1524,7 @@ function PayrollPanel() {
 	};
 
 	const clearSnapshot = () => {
-		localStorage.removeItem("payroll_snapshot");
-		localStorage.removeItem("payroll_snapshot_updated");
+		clearPayrollSnapshot().catch(() => {});
 		setEmployees([]);
 		setSelectedEmployeeName(null);
 		setPpvDay({});
@@ -1957,7 +1965,7 @@ function PayrollPanel() {
 					)}
 					{updatedAt && (
 						<p className="text-xs text-slate-500">
-							Last updated: {updatedAt} {aiStatus ? `(${aiStatus})` : ""}
+							Last updated: {new Date(updatedAt).toLocaleString()} {aiStatus ? `(${aiStatus})` : ""}
 						</p>
 					)}
 				</aside>
@@ -2341,23 +2349,14 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const [snapshot, setSnapshot] = useState<PayrollSnapshot | null>(null);
 	const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
-	const loadSnapshot = () => {
-		const raw = localStorage.getItem("payroll_snapshot");
-		const updatedAt = localStorage.getItem("payroll_snapshot_updated");
-		setLastUpdated(updatedAt);
-		if (!raw) {
-			setSnapshot(null);
-			return;
-		}
-		try {
-			setSnapshot(JSON.parse(raw) as PayrollSnapshot);
-		} catch {
-			setSnapshot(null);
-		}
+	const loadSnapshot = async () => {
+		const stored = await fetchPayrollSnapshot();
+		setSnapshot(stored.snapshot);
+		setLastUpdated(stored.updatedAt);
 	};
 
 	useEffect(() => {
-		loadSnapshot();
+		loadSnapshot().catch(() => {});
 	}, []);
 
 	const inflow = user.inflow_username?.trim();
@@ -2440,6 +2439,11 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 							</CardContent>
 						</Card>
 					</div>
+				)}
+				{lastUpdated && (
+					<p className="text-xs text-slate-500">
+						Last updated: {new Date(lastUpdated).toLocaleString()}
+					</p>
 				)}
 
 				{employee?.insights && employee.insights.length > 0 && (
