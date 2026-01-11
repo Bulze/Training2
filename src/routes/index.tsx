@@ -2423,7 +2423,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const totalEarned = sales * percent + bonus - penalty;
 
 	const dailyEarned = useMemo(() => {
-		const byDate = new Map<string, number>();
+		const byDate = new Map<string, { sales: number; bonus: number }>();
 
 		const shifts = employee?.shifts || [];
 		if (shifts.length) {
@@ -2432,27 +2432,29 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				if (!dateKey) continue;
 				const shiftSales = Number(shift.sales ?? 0);
 				const shiftBonus = Number(shift.bonus ?? 0);
-				const earned = shiftSales * percent + shiftBonus;
-				byDate.set(dateKey, (byDate.get(dateKey) ?? 0) + earned);
+				const prev = byDate.get(dateKey) ?? { sales: 0, bonus: 0 };
+				byDate.set(dateKey, { sales: prev.sales + shiftSales, bonus: prev.bonus + shiftBonus });
 			}
 		} else {
 			const daily = employee?.daily_sales || {};
 			for (const [dateKeyRaw, value] of Object.entries(daily)) {
 				const dateKey = String(dateKeyRaw || "").slice(0, 10);
 				if (!dateKey) continue;
-				byDate.set(dateKey, (byDate.get(dateKey) ?? 0) + Number(value ?? 0) * percent);
+				const prev = byDate.get(dateKey) ?? { sales: 0, bonus: 0 };
+				byDate.set(dateKey, { sales: prev.sales + Number(value ?? 0), bonus: prev.bonus });
 			}
 		}
 
-		const entries = Array.from(byDate.entries()).map(([dateKey, earned]) => {
+		const entries = Array.from(byDate.entries()).map(([dateKey, values]) => {
 			let date: Date | null = null;
 			try {
 				date = parseISO(dateKey);
 			} catch {
 				date = null;
 			}
-			return { dateKey, date, earned };
-		}).filter((x) => x.date) as Array<{ dateKey: string; date: Date; earned: number }>;
+			const earned = values.sales * percent + values.bonus;
+			return { dateKey, date, earned, sales: values.sales, bonus: values.bonus };
+		}).filter((x) => x.date) as Array<{ dateKey: string; date: Date; earned: number; sales: number; bonus: number }>;
 
 		entries.sort((a, b) => a.date.getTime() - b.date.getTime());
 		return entries;
@@ -2529,6 +2531,17 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		return map;
 	}, [payPeriods]);
 
+	const currentPeriod = useMemo(() => {
+		if (!payPeriods.length || !snapshot?.max_date) return null;
+		let reference: Date;
+		try {
+			reference = parseISO(snapshot.max_date);
+		} catch {
+			return null;
+		}
+		return payPeriods.find((p) => reference >= p.start && reference < p.endExclusive) || payPeriods[payPeriods.length - 1];
+	}, [payPeriods, snapshot]);
+
 	return (
 		<Card className="bg-slate-900 border-slate-800">
 			<CardHeader>
@@ -2600,6 +2613,12 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 								</CardContent>
 							</Card>
 						</div>
+						{currentPeriod && (
+							<div className="rounded border border-slate-800 bg-slate-900/30 px-4 py-3 text-sm text-slate-300">
+								Current pay period: {format(currentPeriod.start, "MMM d")} →{" "}
+								{format(currentPeriod.endExclusive, "MMM d")} (excl) • Total ${currentPeriod.total.toFixed(2)}
+							</div>
+						)}
 
 						<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 							<Card className="bg-slate-900 border-slate-800">
@@ -2609,11 +2628,25 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 								<CardContent>
 									{dailyEarned.length ? (
 										<ResponsiveContainer width="100%" height={240}>
-											<LineChart data={dailyEarned.map((d) => ({ date: d.dateKey, earned: d.earned }))}>
+											<LineChart
+												data={dailyEarned.map((d) => ({
+													date: d.dateKey,
+													earned: d.earned,
+													sales: d.sales,
+													bonus: d.bonus,
+												}))}
+											>
 												<CartesianGrid stroke="rgba(31,42,68,0.4)" />
 												<XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 11 }} />
 												<YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
-												<Tooltip />
+												<Tooltip
+													formatter={(value, name, props) => {
+														if (name === "earned") return [`$${Number(value).toFixed(2)}`, "earned"];
+														if (name === "sales") return [`$${Number(value).toFixed(2)}`, "sales"];
+														if (name === "bonus") return [`$${Number(value).toFixed(2)}`, "bonus"];
+														return [String(value), String(name)];
+													}}
+												/>
 												<Line
 													type="monotone"
 													dataKey="earned"
@@ -2715,7 +2748,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 																${cutoff.total.toFixed(2)}
 															</div>
 														)}
-														{!cutoff && amount > 0 && (
+														{amount > 0 && (
 															<div className="mt-1 text-slate-400">
 																${amount.toFixed(2)}
 															</div>
