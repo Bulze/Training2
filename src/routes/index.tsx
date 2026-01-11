@@ -1166,7 +1166,9 @@ function PayrollPanel() {
 				: error instanceof Error
 					? error.message
 					: "Unknown error";
-		return `${label}: ${message}. ${PAYROLL_API_HINT}`;
+		const origin = typeof window === "undefined" ? "" : window.location.origin;
+		const corsHint = origin ? ` If you set CORS_ORIGINS on Render, include ${origin}.` : "";
+		return `${label}: ${message}. ${PAYROLL_API_HINT}${corsHint}`;
 	};
 
 	const readJsonResponse = async <T,>(response: Response) => {
