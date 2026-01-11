@@ -995,6 +995,15 @@ function UserApprovalsPanel() {
 		},
 	});
 
+	const deleteUser = useMutation({
+		mutationFn: async (userId: string) => {
+			await usersOrm.deleteUsersByIDs([userId]);
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["allUsers"] });
+		},
+	});
+
 	const pending = users.filter((user) => !user.is_admin && !user.is_approved);
 	const approved = users.filter((user) => !user.is_admin && user.is_approved);
 
@@ -1025,8 +1034,12 @@ function UserApprovalsPanel() {
 								</Button>
 								<Button
 									variant="outline"
-									onClick={() => updateUser.mutate({ ...user, is_approved: false })}
-									disabled={updateUser.isPending}
+									onClick={() => {
+										if (confirm(`Remove "${user.name}"? This deletes the user record.`)) {
+											deleteUser.mutate(user.id);
+										}
+									}}
+									disabled={deleteUser.isPending}
 								>
 									Disapprove
 								</Button>
