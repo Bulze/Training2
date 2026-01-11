@@ -4,7 +4,7 @@ import math
 import os
 import re
 import html
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
@@ -113,6 +113,37 @@ def parse_date(value):
         return datetime.strptime(m.group(1), "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def parse_date_range(value):
+    if isinstance(value, datetime):
+        d = value.date()
+        return (d, d)
+    if isinstance(value, date):
+        return (value, value)
+    if value is None:
+        return None
+
+    s = str(value).strip()
+    matches = re.findall(r"(\d{4}-\d{2}-\d{2})", s)
+    if not matches:
+        return None
+
+    try:
+        start = datetime.strptime(matches[0], "%Y-%m-%d").date()
+        end = datetime.strptime(matches[-1], "%Y-%m-%d").date()
+        if end < start:
+            start, end = end, start
+        return (start, end)
+    except ValueError:
+        return None
+
+
+def iter_days(start, end):
+    cur = start
+    while cur <= end:
+        yield cur
+        cur += timedelta(days=1)
 
 
 def parse_money(value):
@@ -306,16 +337,17 @@ def extract_stats(file_stream, date_from=None, date_to=None):
 
     for r in range(2, ws.max_row + 1):
         raw_date = ws.cell(r, idx[DATE_HEADER]).value
-        row_date = parse_date(raw_date)
-        if row_date is None:
+        date_range = parse_date_range(raw_date)
+        if date_range is None:
             continue
+        range_start, range_end = date_range
 
-        if min_date is None or row_date < min_date:
-            min_date = row_date
-        if max_date is None or row_date > max_date:
-            max_date = row_date
+        if min_date is None or range_start < min_date:
+            min_date = range_start
+        if max_date is None or range_end > max_date:
+            max_date = range_end
 
-        rows.append((r, row_date))
+        rows.append((r, range_start, range_end))
 
     if min_date is None or max_date is None:
         raise ValueError("No valid dates found in the sheet.")
@@ -329,16 +361,24 @@ def extract_stats(file_stream, date_from=None, date_to=None):
     per_day = {}
     shifts = {}
 
-    for r, row_date in rows:
-        if row_date < date_from or row_date > date_to:
+    for r, range_start, range_end in rows:
+        if range_end < date_from or range_start > date_to:
             continue
+        overlap_start = max(range_start, date_from)
+        overlap_end = min(range_end, date_to)
+        if overlap_end < overlap_start:
+            continue
+        total_days = (range_end - range_start).days + 1
+        overlap_days = (overlap_end - overlap_start).days + 1
+        fraction = overlap_days / total_days if total_days else 1.0
 
         emp = ws.cell(r, idx[EMP_HEADER]).value
         if emp is None:
             continue
 
         sales_val = ws.cell(r, idx[SALES_HEADER]).value
-        sales = parse_money(sales_val)
+        sales_raw = parse_money(sales_val)
+        sales = sales_raw * fraction
         bonus = math.floor(sales / 500.0) * 15.0
 
         if emp not in stats:
@@ -366,22 +406,22 @@ def extract_stats(file_stream, date_from=None, date_to=None):
         stats[emp]["bonus"] += bonus
 
         if TIPS_HEADER in idx:
-            stats[emp]["tips"] += parse_money(ws.cell(r, idx[TIPS_HEADER]).value)
+            stats[emp]["tips"] += parse_money(ws.cell(r, idx[TIPS_HEADER]).value) * fraction
         if PPV_SALES_HEADER in idx:
-            stats[emp]["ppv_sales"] += parse_money(ws.cell(r, idx[PPV_SALES_HEADER]).value)
+            stats[emp]["ppv_sales"] += parse_money(ws.cell(r, idx[PPV_SALES_HEADER]).value) * fraction
         if DM_SALES_HEADER in idx:
-            stats[emp]["dm_sales"] += parse_money(ws.cell(r, idx[DM_SALES_HEADER]).value)
+            stats[emp]["dm_sales"] += parse_money(ws.cell(r, idx[DM_SALES_HEADER]).value) * fraction
         if DM_SENT_HEADER in idx:
-            stats[emp]["dm_sent"] += parse_number(ws.cell(r, idx[DM_SENT_HEADER]).value) or 0.0
+            stats[emp]["dm_sent"] += (parse_number(ws.cell(r, idx[DM_SENT_HEADER]).value) or 0.0) * fraction
         if FANS_CHATTED_HEADER in idx:
-            stats[emp]["fans_chatted"] += parse_number(ws.cell(r, idx[FANS_CHATTED_HEADER]).value) or 0.0
+            stats[emp]["fans_chatted"] += (parse_number(ws.cell(r, idx[FANS_CHATTED_HEADER]).value) or 0.0) * fraction
         if FANS_SPENT_HEADER in idx:
-            stats[emp]["fans_spent"] += parse_number(ws.cell(r, idx[FANS_SPENT_HEADER]).value) or 0.0
+            stats[emp]["fans_spent"] += (parse_number(ws.cell(r, idx[FANS_SPENT_HEADER]).value) or 0.0) * fraction
 
         if CLOCKED_HOURS_HEADER in idx:
-            stats[emp]["clocked_hours"] += parse_hours(ws.cell(r, idx[CLOCKED_HOURS_HEADER]).value)
+            stats[emp]["clocked_hours"] += parse_hours(ws.cell(r, idx[CLOCKED_HOURS_HEADER]).value) * fraction
         if SCHED_HOURS_HEADER in idx:
-            stats[emp]["scheduled_hours"] += parse_hours(ws.cell(r, idx[SCHED_HOURS_HEADER]).value)
+            stats[emp]["scheduled_hours"] += parse_hours(ws.cell(r, idx[SCHED_HOURS_HEADER]).value) * fraction
 
         if SALES_PER_HOUR_HEADER in idx:
             v = parse_money(ws.cell(r, idx[SALES_PER_HOUR_HEADER]).value)
@@ -405,17 +445,21 @@ def extract_stats(file_stream, date_from=None, date_to=None):
             if v is not None:
                 stats[emp]["response_sched_vals"].append(v)
 
-        per_day[emp].setdefault(row_date.isoformat(), 0.0)
-        per_day[emp][row_date.isoformat()] += sales
-
-        shift = {
-            "date": row_date.isoformat(),
-            "group": ws.cell(r, idx[GROUP_HEADER]).value if GROUP_HEADER in idx else None,
-            "creators": ws.cell(r, idx[CREATORS_HEADER]).value if CREATORS_HEADER in idx else None,
-            "sales": sales,
-            "bonus": bonus,
-        }
-        shifts[emp].append(shift)
+        sales_per_day = sales / overlap_days if overlap_days else sales
+        bonus_per_day = bonus / overlap_days if overlap_days else bonus
+        for day in iter_days(overlap_start, overlap_end):
+            day_key = day.isoformat()
+            per_day[emp].setdefault(day_key, 0.0)
+            per_day[emp][day_key] += sales_per_day
+            shifts[emp].append(
+                {
+                    "date": day_key,
+                    "group": ws.cell(r, idx[GROUP_HEADER]).value if GROUP_HEADER in idx else None,
+                    "creators": ws.cell(r, idx[CREATORS_HEADER]).value if CREATORS_HEADER in idx else None,
+                    "sales": sales_per_day,
+                    "bonus": bonus_per_day,
+                }
+            )
 
     result = []
     for emp, data in stats.items():
