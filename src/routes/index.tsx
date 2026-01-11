@@ -2605,22 +2605,37 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		return payPeriods.find((p) => reference >= p.start && reference < p.endExclusive) || payPeriods[payPeriods.length - 1];
 	}, [payPeriods, snapshot]);
 
+	const formatCurrency = (value: number) => {
+		if (!Number.isFinite(value)) return "$0.00";
+		return `$${value.toFixed(2)}`;
+	};
+
 	return (
-		<Card className="bg-slate-900 border-slate-800">
-			<CardHeader>
-				<div className="flex justify-between items-start">
-					<div>
-						<CardTitle className="text-slate-100">Chatter Dashboard</CardTitle>
+		<Card className="bg-slate-900/60 border-slate-800 backdrop-blur">
+			<CardHeader className="space-y-1">
+				<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+					<div className="min-w-0">
+						<CardTitle className="text-slate-100 text-xl">Chatter Dashboard</CardTitle>
 						<CardDescription className="text-slate-400">
-							Your payroll stats from the latest admin upload
+							Your earnings overview from the latest payroll upload
 						</CardDescription>
 					</div>
-					<Button variant="outline" size="sm" onClick={loadSnapshot}>
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={loadSnapshot}
+						className="border-slate-700 hover:bg-slate-800"
+					>
 						Refresh
 					</Button>
 				</div>
+				{lastUpdated && (
+					<p className="text-xs text-slate-500">
+						Last updated: {new Date(lastUpdated).toLocaleString()}
+					</p>
+				)}
 			</CardHeader>
-			<CardContent className="space-y-4">
+			<CardContent className="space-y-6">
 				{!inflow && (
 					<Alert className="bg-amber-50 border-amber-200">
 						<AlertDescription className="text-amber-800">
@@ -2646,41 +2661,59 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				)}
 
 				{employee && (
-					<div className="space-y-4">
+					<div className="space-y-6">
 						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-							<Card className="bg-slate-900 border-slate-800">
-								<CardHeader>
-									<CardTitle className="text-sm text-slate-200">Total Sales</CardTitle>
+							<Card className="bg-gradient-to-br from-emerald-500/10 to-slate-900 border-slate-800">
+								<CardHeader className="pb-2">
+									<CardTitle className="text-xs uppercase tracking-wide text-slate-300">Total Sales</CardTitle>
 								</CardHeader>
-								<CardContent className="text-2xl font-semibold text-emerald-400">
-									${sales.toFixed(2)}
+								<CardContent>
+									<div className="text-3xl font-semibold text-emerald-300 tabular-nums">
+										{formatCurrency(sales)}
+									</div>
 								</CardContent>
 							</Card>
-							<Card className="bg-slate-900 border-slate-800">
-								<CardHeader>
-									<CardTitle className="text-sm text-slate-200">Total Bonus</CardTitle>
+							<Card className="bg-gradient-to-br from-sky-500/10 to-slate-900 border-slate-800">
+								<CardHeader className="pb-2">
+									<CardTitle className="text-xs uppercase tracking-wide text-slate-300">Total Bonus</CardTitle>
 								</CardHeader>
-								<CardContent className="text-2xl font-semibold text-sky-400">
-									${bonus.toFixed(2)}
+								<CardContent>
+									<div className="text-3xl font-semibold text-sky-300 tabular-nums">
+										{formatCurrency(bonus)}
+									</div>
 								</CardContent>
 							</Card>
-							<Card className="bg-slate-900 border-slate-800">
-								<CardHeader>
-									<CardTitle className="text-sm text-slate-200">Total Earnings</CardTitle>
+							<Card className="bg-gradient-to-br from-amber-500/10 to-slate-900 border-slate-800">
+								<CardHeader className="pb-2">
+									<CardTitle className="text-xs uppercase tracking-wide text-slate-300">Total Earnings</CardTitle>
 									<CardDescription className="text-slate-400">
-										{(percent * 100).toFixed(2)}% • penalty ${penalty.toFixed(2)}
+										{(percent * 100).toFixed(2)}% • penalty {formatCurrency(penalty)}
 									</CardDescription>
 								</CardHeader>
-								<CardContent className="text-2xl font-semibold text-amber-300">
-									${totalEarned.toFixed(2)}
+								<CardContent>
+									<div className="text-3xl font-semibold text-amber-300 tabular-nums">
+										{formatCurrency(totalEarned)}
+									</div>
 								</CardContent>
 							</Card>
 						</div>
 						{currentPeriod && (
-							<div className="rounded border border-slate-800 bg-slate-900/30 px-4 py-3 text-sm text-slate-300">
-								Current pay period: {format(currentPeriod.start, "MMM d")} →{" "}
-								{format(currentPeriod.endExclusive, "MMM d")} (excl) • Total ${currentPeriod.total.toFixed(2)}
-							</div>
+							<Card className="bg-slate-900/40 border-slate-800">
+								<CardHeader className="py-4">
+									<CardTitle className="text-sm text-slate-200">Current Pay Period</CardTitle>
+									<CardDescription className="text-slate-400">
+										{format(currentPeriod.start, "MMM d")} → {format(currentPeriod.endExclusive, "MMM d")} (excl)
+									</CardDescription>
+								</CardHeader>
+								<CardContent className="pt-0">
+									<div className="flex items-baseline justify-between">
+										<span className="text-slate-400 text-sm">Period earnings</span>
+										<span className="text-lg font-semibold text-amber-300 tabular-nums">
+											{formatCurrency(currentPeriod.total)}
+										</span>
+									</div>
+								</CardContent>
+							</Card>
 						)}
 
 						<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -2828,12 +2861,6 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 						</div>
 					</div>
 				)}
-				{lastUpdated && (
-					<p className="text-xs text-slate-500">
-						Last updated: {new Date(lastUpdated).toLocaleString()}
-					</p>
-				)}
-
 				{employee?.insights && employee.insights.length > 0 && (
 					<div className="space-y-2">
 						<Label className="text-slate-300">Insights</Label>
@@ -2843,10 +2870,6 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 							))}
 						</ul>
 					</div>
-				)}
-
-				{lastUpdated && (
-					<p className="text-xs text-slate-500">Last updated: {lastUpdated}</p>
 				)}
 			</CardContent>
 		</Card>
