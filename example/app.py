@@ -322,7 +322,12 @@ def build_ai_insights(stats, ai_enabled=True):
 
 def extract_stats(file_stream, date_from=None, date_to=None):
     wb = load_workbook(file_stream, data_only=True)
+    # Prefer per-day sheet when workbook includes both totals and per-day tabs.
     ws = wb.active
+    for candidate in ("By time and employee", "By Time And Employee", "By time & employee"):
+        if candidate in wb.sheetnames:
+            ws = wb[candidate]
+            break
 
     headers = [ws.cell(1, c).value for c in range(1, ws.max_column + 1)]
     idx = {h: i + 1 for i, h in enumerate(headers)}

@@ -1163,6 +1163,7 @@ function PayrollPanel() {
 	const [chatFile, setChatFile] = useState<File | null>(null);
 	const [dateFrom, setDateFrom] = useState("");
 	const [dateTo, setDateTo] = useState("");
+	const [dateFilterTouched, setDateFilterTouched] = useState(false);
 	const [minDate, setMinDate] = useState("");
 	const [maxDate, setMaxDate] = useState("");
 	const [defaultPercent, setDefaultPercent] = useState(9);
@@ -1387,8 +1388,10 @@ function PayrollPanel() {
 		if (chatFile) {
 			formData.append("chat_file", chatFile);
 		}
-		if (dateFrom) formData.append("date_from", dateFrom);
-		if (dateTo) formData.append("date_to", dateTo);
+		if (dateFilterTouched) {
+			if (dateFrom) formData.append("date_from", dateFrom);
+			if (dateTo) formData.append("date_to", dateTo);
+		}
 		formData.append("ai_enabled", aiEnabled ? "true" : "false");
 
 		const controller = new AbortController();
@@ -1428,8 +1431,11 @@ function PayrollPanel() {
 
 			setMinDate(data.min_date || "");
 			setMaxDate(data.max_date || "");
-			if (!dateFrom && data.min_date) setDateFrom(data.min_date);
-			if (!dateTo && data.max_date) setDateTo(data.max_date);
+			// Default to full range after each upload unless the admin explicitly filtered.
+			if (!dateFilterTouched) {
+				setDateFrom(data.min_date || "");
+				setDateTo(data.max_date || "");
+			}
 
 			const percentValue = Number(defaultPercent) || 9;
 			const preparedEmployees = (data.employees || []).map((emp) => ({
@@ -1445,6 +1451,7 @@ function PayrollPanel() {
 			setEmployeeFeedback({});
 			setEmployeeSearch("");
 			setShowAllEmployees(false);
+			setDateFilterTouched(false);
 			setSelectedEmployeeName(null);
 			setActiveTab("detail");
 
@@ -1661,7 +1668,10 @@ function PayrollPanel() {
 						min={minDate || undefined}
 						max={maxDate || undefined}
 						value={dateFrom}
-						onChange={(e) => setDateFrom(e.target.value)}
+						onChange={(e) => {
+							setDateFrom(e.target.value);
+							setDateFilterTouched(true);
+						}}
 					/>
 				</div>
 				<div className="field">
@@ -1671,7 +1681,10 @@ function PayrollPanel() {
 						min={minDate || undefined}
 						max={maxDate || undefined}
 						value={dateTo}
-						onChange={(e) => setDateTo(e.target.value)}
+						onChange={(e) => {
+							setDateTo(e.target.value);
+							setDateFilterTouched(true);
+						}}
 					/>
 				</div>
 				<div className="field">
