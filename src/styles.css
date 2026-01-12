@@ -277,7 +277,7 @@ code {
 }
 
 .app-shell {
-	background: linear-gradient(180deg, #202a3a 0%, #1b2330 100%);
+	background: linear-gradient(180deg, #1f2633 0%, #1b2230 100%);
 }
 
 .app-shell .bg-slate-950,
@@ -287,13 +287,13 @@ code {
 .app-shell .bg-slate-800,
 .app-shell .bg-slate-800\/30,
 .app-shell .bg-slate-800\/60 {
-	background-color: #222c3b !important;
+	background-color: #2a3242 !important;
 }
 
 .app-shell .border-slate-800,
 .app-shell .border-slate-700,
 .app-shell .border-slate-700\/40 {
-	border-color: #3a4556 !important;
+	border-color: #3c475b !important;
 }
 
 .app-shell .text-slate-100,
@@ -874,8 +874,8 @@ code {
 }
 .app-shell button,
 .app-shell .btn {
-	background-color: #2b3748;
-	border-color: #3a4556;
+	background-color: #2f3a4b;
+	border-color: #3c475b;
 	color: #e7ebf0;
 	display: inline-flex;
 	align-items: center;
@@ -888,7 +888,7 @@ code {
 
 .app-shell button:hover,
 .app-shell .btn:hover {
-	background-color: #354256;
+	background-color: #374459;
 }
 
 .app-shell button,
@@ -923,8 +923,8 @@ code {
 .app-shell .payroll-app .chat-analysis,
 .app-shell .payroll-app .ppv-panel,
 .app-shell .payroll-app .chart-card {
-	background: #1f2836;
-	border-color: #3a4556;
+	background: #2a3242;
+	border-color: #3c475b;
 	color: #e7ebf0;
 }
 
@@ -934,23 +934,23 @@ code {
 .app-shell .payroll-app .stats,
 .app-shell .payroll-app .compare-grid,
 .app-shell .payroll-app .chat-columns {
-	background: #202a3a;
-	border-color: #3a4556;
+	background: #2b3445;
+	border-color: #3c475b;
 }
 
 .app-shell .payroll-app table {
-	background: #1f2836;
+	background: #2a3242;
 	color: #e7ebf0;
 }
 
 .app-shell .payroll-app thead {
-	background: #263246;
+	background: #2f3a4b;
 }
 
 .app-shell .payroll-app tbody tr:nth-child(odd) {
-	background: #1c2533;
+	background: #2b3445;
 }
 
 .app-shell .payroll-app tbody tr:hover {
-	background: #2a3648;
+	background: #344154;
 }
