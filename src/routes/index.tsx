@@ -2935,6 +2935,24 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		return map;
 	}, [dailyEarned]);
 
+	const monthEstimate = useMemo(() => {
+		if (!calendarMonth || dailyEarned.length === 0) return null;
+		const monthStart = startOfMonth(calendarMonth);
+		const monthEnd = endOfMonth(calendarMonth);
+		const monthEntries = dailyEarned.filter((entry) => entry.date >= monthStart && entry.date <= monthEnd);
+		if (monthEntries.length === 0) return null;
+		const monthTotal = monthEntries.reduce((sum, entry) => sum + entry.earned, 0);
+		const lastEntryDate = monthEntries[monthEntries.length - 1].date;
+		const daysElapsed = Math.max(1, Math.floor((lastEntryDate.getTime() - monthStart.getTime()) / 86400000) + 1);
+		const daysInMonth = Math.floor((monthEnd.getTime() - monthStart.getTime()) / 86400000) + 1;
+		const estimate = (monthTotal / daysElapsed) * daysInMonth;
+		return {
+			monthTotal,
+			estimate,
+			ideal: estimate * 1.8,
+		};
+	}, [calendarMonth, dailyEarned]);
+
 	const payPeriods = useMemo(() => {
 		if (!dailyEarned.length) return [];
 		const first = dailyEarned[0].date;
@@ -3193,6 +3211,22 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 										</ResponsiveContainer>
 									) : (
 										<p className="text-sm text-slate-400">No daily data available.</p>
+									)}
+									{monthEstimate && (
+										<div className="mt-4 flex flex-col gap-2 text-sm">
+											<div className="flex items-center justify-between">
+												<span className="text-slate-400">Estimated month earnings</span>
+												<span className="text-amber-300 font-semibold tabular-nums">
+													{formatCurrency(monthEstimate.estimate)}
+												</span>
+											</div>
+											<div className="flex items-center justify-between">
+												<span className="text-slate-400">Ideal month (1.8x)</span>
+												<span className="text-emerald-300 font-semibold tabular-nums">
+													{formatCurrency(monthEstimate.ideal)}
+												</span>
+											</div>
+										</div>
 									)}
 								</CardContent>
 							</Card>
