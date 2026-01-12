@@ -3213,19 +3213,24 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 										<p className="text-sm text-slate-400">No daily data available.</p>
 									)}
 									{monthEstimate && (
-										<div className="mt-4 flex flex-col gap-2 text-sm">
+										<div className="mt-4 space-y-3 text-sm">
 											<div className="flex items-center justify-between">
 												<span className="text-slate-400">Estimated month earnings</span>
 												<span className="text-amber-300 font-semibold tabular-nums">
 													{formatCurrency(monthEstimate.estimate)}
 												</span>
 											</div>
+											<Progress
+												value={Math.min(100, Math.max(0, (monthEstimate.estimate / monthEstimate.ideal) * 100))}
+												className="h-2 bg-slate-800"
+											/>
 											<div className="flex items-center justify-between">
-												<span className="text-slate-400">Ideal month (1.8x)</span>
+												<span className="text-slate-400">Ideal month</span>
 												<span className="text-emerald-300 font-semibold tabular-nums">
 													{formatCurrency(monthEstimate.ideal)}
 												</span>
 											</div>
+											<Progress value={100} className="h-2 bg-slate-800" />
 										</div>
 									)}
 								</CardContent>
