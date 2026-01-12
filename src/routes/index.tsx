@@ -3591,33 +3591,21 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 													<div
 														key={key}
 														className={[
-															"rounded border p-3 min-h-[84px] calendar-cell",
+															"rounded border p-3 min-h-[96px] calendar-cell",
 															"border-slate-200",
-															cutoff ? "bg-amber-500/10 border-amber-500/40" : "bg-white/70",
+															cutoff ? "calendar-cutoff" : "calendar-base",
 															salesClass,
 															muted ? "opacity-40" : "",
 														].join(" ")}
 													>
 														<div className="flex justify-between text-slate-300">
 															<span className="calendar-day">{format(day, "d")}</span>
-															<span className="text-amber-300">
-																{cutoff ? "CUT" : ""}
+															<span className="calendar-amount">
+																{salesAmount ? formatCurrency(salesAmount, 0) : ""}
 															</span>
 														</div>
-														{cutoff && (
-															<div className="mt-1 text-amber-300 font-semibold">
-																{formatCurrency(cutoff.total, 2)}
-															</div>
-														)}
-														{salesAmount > 0 && (
-															<div className="mt-1 text-slate-300 calendar-meta">
-																Sales {formatCurrency(salesAmount, 2)}
-															</div>
-														)}
 														{dayBonus > 0 && (
-															<div className="mt-1 text-sky-300 calendar-meta">
-																Bonus {formatCurrency(dayBonus, 2)}
-															</div>
+															<span className="calendar-badge">Bonus</span>
 														)}
 													</div>
 												);

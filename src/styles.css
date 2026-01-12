@@ -785,18 +785,21 @@ code {
 .chatter-neo .calendar-cell {
 	border-color: #3a465c;
 	background: #2b3445;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
 }
 
 .chatter-neo .calendar-cell-low {
-	background: linear-gradient(180deg, rgba(248, 113, 113, 0.2), rgba(43, 52, 69, 0.95));
+	background: #3a4b3a;
 }
 
 .chatter-neo .calendar-cell-mid {
-	background: linear-gradient(180deg, rgba(240, 180, 41, 0.2), rgba(43, 52, 69, 0.95));
+	background: #6e5a18;
 }
 
 .chatter-neo .calendar-cell-strong {
-	background: linear-gradient(180deg, rgba(34, 197, 94, 0.22), rgba(43, 52, 69, 0.95));
+	background: #2f8a0a;
 }
 
 .chatter-neo button {
@@ -810,17 +813,48 @@ code {
 }
 
 .chatter-neo .calendar-grid {
-	gap: 10px;
+	gap: 12px;
 }
 
 .chatter-neo .calendar-cell {
-	border-radius: 10px;
+	border-radius: 8px;
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .chatter-neo .calendar-day {
 	font-size: 12px;
 	letter-spacing: 0.02em;
+	font-weight: 600;
+	color: #e6edf6;
+}
+
+.chatter-neo .calendar-amount {
+	font-size: 13px;
+	font-weight: 600;
+	color: #e6edf6;
+}
+
+.chatter-neo .calendar-base {
+	background: #343e50;
+	border-color: #3e4a60;
+}
+
+.chatter-neo .calendar-cutoff {
+	background: #2f3a4b;
+	border-color: #f0b429;
+	box-shadow: inset 0 0 0 1px rgba(240, 180, 41, 0.35);
+}
+
+.chatter-neo .calendar-badge {
+	align-self: flex-start;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: rgba(15, 23, 42, 0.55);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	font-size: 10px;
+	color: #e6edf6;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
 }
 .app-shell button,
 .app-shell .btn {
