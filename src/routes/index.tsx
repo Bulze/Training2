@@ -3154,7 +3154,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	}, [currentCutBonusEntries]);
 
 	const currentCutTotal = (currentPeriod?.total ?? 0) + bonusEntriesTotal;
-	const currentCutBonus = (currentPeriod?.bonusTotal ?? 0) + bonusEntriesTotal;
+	const currentCutBonus = currentPeriod?.bonusTotal ?? 0;
 	const previousPeriod = useMemo(() => {
 		if (!currentPeriod) return null;
 		const index = payPeriods.findIndex((p) => p.key === currentPeriod.key);
