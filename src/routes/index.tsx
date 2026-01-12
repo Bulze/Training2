@@ -30,7 +30,6 @@ import {
 	endOfMonth,
 	endOfWeek,
 	format,
-	getDay,
 	isSameMonth,
 	parseISO,
 	startOfMonth,
@@ -2843,8 +2842,11 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const manualBonus = Number(chatterMeta?.manual_bonus ?? 0);
 	const manualPenalty = Number(chatterMeta?.manual_penalty ?? 0);
 	const sales = Number(employee?.sales ?? 0);
-	const bonus = Number(employee?.bonus ?? 0);
-	const totalEarned = sales * percent + bonus + manualBonus - manualPenalty;
+
+	const computeShiftBonus = (value: number) => {
+		if (!Number.isFinite(value) || value <= 0) return 0;
+		return Math.floor(value / 500) * 15;
+	};
 
 	const dailyEarned = useMemo(() => {
 		const byDate = new Map<string, { sales: number; bonus: number }>();
@@ -2855,8 +2857,9 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				const dateKey = String(shift.date || "").slice(0, 10);
 				if (!dateKey) continue;
 				const shiftSales = Number(shift.sales ?? 0);
+				const shiftBonus = computeShiftBonus(shiftSales);
 				const prev = byDate.get(dateKey) ?? { sales: 0, bonus: 0 };
-				byDate.set(dateKey, { sales: prev.sales + shiftSales, bonus: prev.bonus });
+				byDate.set(dateKey, { sales: prev.sales + shiftSales, bonus: prev.bonus + shiftBonus });
 			}
 			const bonusByDay = employee?.daily_bonus || {};
 			for (const [dateKey, dayBonus] of Object.entries(bonusByDay)) {
@@ -2870,8 +2873,10 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 			for (const [dateKeyRaw, value] of Object.entries(daily)) {
 				const dateKey = String(dateKeyRaw || "").slice(0, 10);
 				if (!dateKey) continue;
+				const daySales = Number(value ?? 0);
+				const dayBonus = computeShiftBonus(daySales);
 				const prev = byDate.get(dateKey) ?? { sales: 0, bonus: 0 };
-				byDate.set(dateKey, { sales: prev.sales + Number(value ?? 0), bonus: prev.bonus });
+				byDate.set(dateKey, { sales: prev.sales + daySales, bonus: prev.bonus + dayBonus });
 			}
 			const bonusByDay = employee?.daily_bonus || {};
 			for (const [dateKeyRaw, dayBonus] of Object.entries(bonusByDay)) {
@@ -2927,24 +2932,41 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		return map;
 	}, [dailyEarned]);
 
+	const bonusByDay = useMemo(() => {
+		const map = new Map<string, number>();
+		for (const item of dailyEarned) {
+			map.set(item.dateKey, item.bonus);
+		}
+		return map;
+	}, [dailyEarned]);
+
+	const getCutPeriodStart = (date: Date) => {
+		let start = new Date(date.getFullYear(), date.getMonth(), 26);
+		if (date < start) {
+			start = new Date(start.getFullYear(), start.getMonth() - 1, 26);
+		}
+		while (date >= addDays(start, 14)) {
+			start = addDays(start, 14);
+		}
+		return start;
+	};
+
 	const payPeriods = useMemo(() => {
 		if (!dailyEarned.length) return [];
 		const first = dailyEarned[0].date;
 		const last = dailyEarned[dailyEarned.length - 1].date;
 
-		// Agency "cutoff" happens Thu->Fri, so periods start on Friday.
-		// We group into 14-day periods (roughly 2 per month).
+		// Agency cut runs in 14-day cycles starting on the 26th (ex: 26-8, 9-22).
 		const PERIOD_DAYS = 14;
-		let start = first;
-		// Align to previous Friday (period starts Friday).
-		while (getDay(start) !== 5) start = subDays(start, 1);
+		let start = getCutPeriodStart(first);
 
-		const periods: Array<{ start: Date; endExclusive: Date; cutoff: Date; total: number; key: string }> = [];
+		const periods: Array<{ start: Date; endExclusive: Date; cutoff: Date; total: number; bonusTotal: number; key: string }> = [];
 		while (start <= addDays(last, 1)) {
 			const endExclusive = addDays(start, PERIOD_DAYS);
-			const cutoff = subDays(endExclusive, 1); // Thursday
+			const cutoff = subDays(endExclusive, 1);
 			const key = `${format(start, "yyyy-MM-dd")}__${format(endExclusive, "yyyy-MM-dd")}`;
 			let total = 0;
+			let bonusTotal = 0;
 			for (const [dateKey, amount] of earnedByDay.entries()) {
 				let day: Date;
 				try {
@@ -2952,13 +2974,16 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				} catch {
 					continue;
 				}
-				if (day >= start && day < endExclusive) total += amount;
+				if (day >= start && day < endExclusive) {
+					total += amount;
+					bonusTotal += bonusByDay.get(dateKey) ?? 0;
+				}
 			}
-			periods.push({ start, endExclusive, cutoff, total, key });
+			periods.push({ start, endExclusive, cutoff, total, bonusTotal, key });
 			start = endExclusive;
 		}
-		return periods.filter((p) => p.total > 0);
-	}, [dailyEarned, earnedByDay]);
+		return periods.filter((p) => p.total > 0 || p.bonusTotal > 0);
+	}, [dailyEarned, earnedByDay, bonusByDay]);
 
 	const payPeriodByCutoff = useMemo(() => {
 		const map = new Map<string, { total: number; start: Date; endExclusive: Date }>();
@@ -2969,15 +2994,24 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	}, [payPeriods]);
 
 	const currentPeriod = useMemo(() => {
-		if (!payPeriods.length || !snapshot?.max_date) return null;
-		let reference: Date;
-		try {
-			reference = parseISO(snapshot.max_date);
-		} catch {
-			return null;
+		if (!payPeriods.length) return null;
+		let reference: Date | null = null;
+		if (snapshot?.max_date) {
+			try {
+				reference = parseISO(snapshot.max_date);
+			} catch {
+				reference = null;
+			}
 		}
+		if (!reference) {
+			reference = dailyEarned[dailyEarned.length - 1]?.date ?? null;
+		}
+		if (!reference) return payPeriods[payPeriods.length - 1];
 		return payPeriods.find((p) => reference >= p.start && reference < p.endExclusive) || payPeriods[payPeriods.length - 1];
-	}, [payPeriods, snapshot]);
+	}, [payPeriods, snapshot, dailyEarned]);
+
+	const currentCutTotal = currentPeriod?.total ?? 0;
+	const currentCutBonus = currentPeriod?.bonusTotal ?? 0;
 
 	const formatCurrency = (value: unknown, digits = 2) => {
 		const amount = typeof value === "number" ? value : Number(value);
@@ -3063,24 +3097,24 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 							</Card>
 							<Card className="bg-gradient-to-br from-sky-500/10 to-slate-900 border-slate-800">
 								<CardHeader className="pb-2">
-									<CardTitle className="text-xs uppercase tracking-wide text-slate-300">Total Bonus</CardTitle>
+									<CardTitle className="text-xs uppercase tracking-wide text-slate-300">Current Bonuses</CardTitle>
 								</CardHeader>
 								<CardContent>
 									<div className="text-3xl font-semibold text-sky-300 tabular-nums">
-										{formatCurrency(bonus)}
+										{formatCurrency(currentCutBonus)}
 									</div>
 								</CardContent>
 							</Card>
 							<Card className="bg-gradient-to-br from-amber-500/10 to-slate-900 border-slate-800">
 								<CardHeader className="pb-2">
-									<CardTitle className="text-xs uppercase tracking-wide text-slate-300">Total Earnings</CardTitle>
+									<CardTitle className="text-xs uppercase tracking-wide text-slate-300">Current Cut</CardTitle>
 									<CardDescription className="text-slate-400">
 										{(percent * 100).toFixed(2)}% | manual bonus {formatCurrency(manualBonus)} | manual penalty {formatCurrency(manualPenalty)}
 									</CardDescription>
 								</CardHeader>
 								<CardContent>
 									<div className="text-3xl font-semibold text-amber-300 tabular-nums">
-										{formatCurrency(totalEarned)}
+										{formatCurrency(currentCutTotal)}
 									</div>
 								</CardContent>
 							</Card>
@@ -3088,16 +3122,22 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 						{currentPeriod && (
 							<Card className="bg-slate-900/40 border-slate-800">
 								<CardHeader className="py-4">
-									<CardTitle className="text-sm text-slate-200">Current Pay Period</CardTitle>
+									<CardTitle className="text-sm text-slate-200">Current Cut</CardTitle>
 									<CardDescription className="text-slate-400">
-										{format(currentPeriod.start, "MMM d")} → {format(currentPeriod.endExclusive, "MMM d")} (excl)
+										{format(currentPeriod.start, "MMM d")} to {format(subDays(currentPeriod.endExclusive, 1), "MMM d")}
 									</CardDescription>
 								</CardHeader>
 								<CardContent className="pt-0">
 									<div className="flex items-baseline justify-between">
-										<span className="text-slate-400 text-sm">Period earnings</span>
+										<span className="text-slate-400 text-sm">Cut earnings</span>
 										<span className="text-lg font-semibold text-amber-300 tabular-nums">
 											{formatCurrency(currentPeriod.total)}
+										</span>
+									</div>
+									<div className="mt-2 flex items-baseline justify-between">
+										<span className="text-slate-400 text-sm">Cut bonus</span>
+										<span className="text-sm font-semibold text-sky-300 tabular-nums">
+											{formatCurrency(currentPeriod.bonusTotal)}
 										</span>
 									</div>
 								</CardContent>
@@ -3190,10 +3230,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 														key={p.key}
 														className="flex items-center justify-between rounded border border-slate-700 bg-slate-900/30 px-3 py-2"
 													>
-														<span className="text-slate-300">
-															Cutoff {format(p.cutoff, "MMM d")} •{" "}
-															{format(p.start, "MMM d")} → {format(p.endExclusive, "MMM d")} (excl)
-														</span>
+														<span className="text-slate-300">Cut {format(p.start, "MMM d")} to {format(subDays(p.endExclusive, 1), "MMM d")}</span>
 														<span className="font-semibold text-amber-300">{formatCurrency(p.total, 2)}</span>
 													</div>
 												))}
@@ -3209,6 +3246,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 											{calendarDays.map((day) => {
 												const key = format(day, "yyyy-MM-dd");
 												const amount = earnedByDay.get(key) ?? 0;
+												const dayBonus = bonusByDay.get(key) ?? 0;
 												const cutoff = payPeriodByCutoff.get(key);
 												const muted = !isSameMonth(day, calendarMonth);
 												return (
@@ -3235,6 +3273,11 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 														{amount > 0 && (
 															<div className="mt-1 text-slate-400">
 																{formatCurrency(amount, 2)}
+															</div>
+														)}
+														{dayBonus > 0 && (
+															<div className="mt-1 text-sky-300">
+																Bonus {formatCurrency(dayBonus, 2)}
 															</div>
 														)}
 													</div>
@@ -4653,4 +4696,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 		</div>
 	);
 }
+
+
+
 
