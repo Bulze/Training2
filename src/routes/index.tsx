@@ -2953,7 +2953,7 @@ function UserView({ user }: { user: UsersModel }) {
 							return (
 								<Card
 									key={video.id}
-									className="stat-card cursor-pointer hover:shadow-lg hover:shadow-slate-700/40 transition-shadow"
+									className="training-card cursor-pointer transition-shadow"
 									onClick={() => handleSelectVideo(video)}
 								>
 									<CardHeader>
