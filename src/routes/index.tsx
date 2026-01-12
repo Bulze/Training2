@@ -443,7 +443,7 @@ function App() {
 	}
 
 	return (
-		<div className="min-h-screen bg-[radial-gradient(circle_at_top,_#111b34_0%,_#0a0f1f_55%)]">
+		<div className="min-h-screen app-shell">
 			<div className="container mx-auto py-8 px-4">
 				<div className="flex justify-between items-center mb-8">
 					<div>
@@ -4575,7 +4575,7 @@ function CompletionScreen({
 
 function PendingApprovalScreen({ user, onLogout }: { user: UsersModel; onLogout: () => void }) {
 	return (
-		<div className="min-h-screen bg-[radial-gradient(circle_at_top,_#111b34_0%,_#0a0f1f_55%)] flex items-center justify-center px-4">
+		<div className="min-h-screen app-shell flex items-center justify-center px-4">
 			<Card className="w-full max-w-lg bg-slate-900 border-slate-800">
 				<CardHeader className="text-center">
 					<CardTitle className="text-2xl text-slate-100">Approval Required</CardTitle>
