@@ -494,7 +494,7 @@ function App() {
 	}
 
 	return (
-		<div className="min-h-screen app-shell">
+		<div className="min-h-screen app-shell chatter-neo">
 			<div className="container mx-auto py-8 px-4">
 				<div className="flex justify-between items-center mb-8">
 					<div>
@@ -2939,7 +2939,7 @@ function UserView({ user }: { user: UsersModel }) {
 			{user.role === "chatter" && (
 				<ChatterDashboard user={user} />
 			)}
-			<Card className="chatter-panel">
+			<Card className="chatter-panel chatter-neo">
 				<CardHeader>
 					<CardTitle className="text-slate-100">Available Training Videos</CardTitle>
 					<CardDescription className="text-slate-400">Select a video to begin your training</CardDescription>
