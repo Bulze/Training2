@@ -141,9 +141,9 @@ code {
 
 .login-shell {
 	position: relative;
-	background: radial-gradient(circle at 20% 10%, rgba(79, 140, 255, 0.16), transparent 55%),
-		radial-gradient(circle at 80% 0%, rgba(240, 180, 41, 0.12), transparent 52%),
-		linear-gradient(180deg, #202a3a 0%, #1b2330 100%);
+	background: radial-gradient(circle at 20% 10%, rgba(72, 86, 116, 0.18), transparent 55%),
+		radial-gradient(circle at 80% 0%, rgba(72, 86, 116, 0.14), transparent 52%),
+		linear-gradient(180deg, #1f2633 0%, #1b2230 100%);
 	overflow: hidden;
 }
 
@@ -158,8 +158,8 @@ code {
 }
 
 .login-card {
-	background: linear-gradient(145deg, rgba(34, 44, 59, 0.96), rgba(27, 35, 48, 0.98));
-	border: 1px solid rgba(90, 102, 124, 0.45);
+	background: linear-gradient(145deg, rgba(42, 50, 66, 0.96), rgba(31, 38, 51, 0.98));
+	border: 1px solid rgba(60, 71, 91, 0.75);
 	box-shadow: 0 30px 80px rgba(9, 14, 25, 0.6);
 	backdrop-filter: blur(12px);
 }
@@ -174,8 +174,8 @@ code {
 }
 
 .login-input {
-	background: #1f2836;
-	border: 1px solid rgba(90, 102, 124, 0.55);
+	background: #232c3c;
+	border: 1px solid rgba(60, 71, 91, 0.75);
 }
 
 .login-input:focus {
@@ -184,7 +184,7 @@ code {
 }
 
 .login-primary {
-	background: linear-gradient(135deg, rgba(79, 140, 255, 0.95), rgba(34, 197, 94, 0.9));
+	background: linear-gradient(135deg, rgba(92, 106, 136, 0.95), rgba(76, 88, 114, 0.95));
 	border: none;
 	box-shadow: 0 16px 30px rgba(15, 23, 42, 0.45);
 }
@@ -216,15 +216,15 @@ code {
 }
 
 .quiz-shell {
-	background: radial-gradient(circle at 25% 10%, rgba(79, 140, 255, 0.18), transparent 60%),
-		linear-gradient(180deg, rgba(34, 44, 59, 0.98), rgba(27, 35, 48, 0.98));
+	background: radial-gradient(circle at 25% 10%, rgba(72, 86, 116, 0.2), transparent 60%),
+		linear-gradient(180deg, rgba(42, 50, 66, 0.98), rgba(31, 38, 51, 0.98));
 	border-radius: 20px;
 	padding: 12px;
 }
 
 .quiz-card {
-	background: linear-gradient(145deg, rgba(34, 44, 59, 0.96), rgba(26, 34, 46, 0.98));
-	border: 1px solid rgba(90, 102, 124, 0.45);
+	background: linear-gradient(145deg, rgba(42, 50, 66, 0.96), rgba(31, 38, 51, 0.98));
+	border: 1px solid rgba(60, 71, 91, 0.75);
 	box-shadow: 0 22px 48px rgba(9, 14, 25, 0.6);
 }
 
@@ -308,19 +308,19 @@ code {
 }
 
 .app-shell .text-green-400 {
-	color: #22c55e !important;
+	color: #e6edf6 !important;
 }
 
 .app-shell .text-green-300 {
-	color: #4ade80 !important;
+	color: #e6edf6 !important;
 }
 
 .app-shell .text-amber-300 {
-	color: #f0b429 !important;
+	color: #e6edf6 !important;
 }
 
 .app-shell .text-sky-300 {
-	color: #38bdf8 !important;
+	color: #e6edf6 !important;
 }
 
 .payroll-app,
@@ -803,13 +803,13 @@ code {
 }
 
 .chatter-neo button {
-	background-color: #2b3748;
-	border-color: #3a4556;
+	background-color: #2f3a4b;
+	border-color: #3c475b;
 	color: #e7ebf0;
 }
 
 .chatter-neo button:hover {
-	background-color: #344154;
+	background-color: #374459;
 }
 
 .chatter-neo .calendar-grid {

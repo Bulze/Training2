@@ -3412,12 +3412,6 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 												}))}
 												margin={{ top: 16, right: 16, left: 8, bottom: 8 }}
 											>
-												<defs>
-													<linearGradient id="earningsGlow" x1="0" y1="0" x2="1" y2="0">
-														<stop offset="0%" stopColor="#38bdf8" stopOpacity={0.85} />
-														<stop offset="100%" stopColor="#22c55e" stopOpacity={0.85} />
-													</linearGradient>
-												</defs>
 												<CartesianGrid stroke="rgba(31,42,68,0.4)" />
 												<XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 11 }} />
 												<YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
@@ -3438,10 +3432,10 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 												<Line
 													type="monotone"
 													dataKey="earned"
-													stroke="url(#earningsGlow)"
+													stroke="#d6dde8"
 													strokeWidth={3}
-													dot={{ r: 3, stroke: "#e2e8f0", strokeWidth: 1, fill: "#38bdf8" }}
-													activeDot={{ r: 5, stroke: "#22c55e", strokeWidth: 2, fill: "#0b1224" }}
+													dot={{ r: 3, stroke: "#e6edf6", strokeWidth: 1, fill: "#d6dde8" }}
+													activeDot={{ r: 5, stroke: "#e6edf6", strokeWidth: 2, fill: "#1f2633" }}
 												/>
 											</LineChart>
 										</ResponsiveContainer>
@@ -3452,7 +3446,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 										<div className="mt-4 space-y-3 text-sm">
 											<div className="flex items-center justify-between">
 												<span className="text-slate-400">Estimated month earnings</span>
-												<span className="text-amber-300 font-semibold tabular-nums">
+												<span className="text-slate-100 font-semibold tabular-nums">
 													{formatCurrency(monthEstimate.estimate)}
 												</span>
 											</div>
@@ -3462,7 +3456,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 											/>
 											<div className="flex items-center justify-between">
 												<span className="text-slate-400">Ideal month</span>
-												<span className="text-emerald-300 font-semibold tabular-nums">
+												<span className="text-slate-100 font-semibold tabular-nums">
 													{formatCurrency(monthEstimate.ideal)}
 												</span>
 											</div>
