@@ -3235,7 +3235,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				{employee && (
 					<div className="space-y-6">
 						{(chatterMeta?.admin_review || "").trim() && (
-							<Card className="bg-white/80 border-slate-200">
+							<Card className="chatter-panel">
 								<CardHeader className="py-4">
 									<CardTitle className="text-sm text-slate-200">Admin review</CardTitle>
 									<CardDescription className="text-slate-400">Feedback from management</CardDescription>
@@ -3283,7 +3283,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 							</Card>
 						</div>
 						{currentPeriod && (
-							<Card className="bg-white/80 border-slate-200">
+							<Card className="chatter-panel">
 								<CardHeader className="py-4">
 									<CardTitle className="text-sm text-slate-200">Cut Summary</CardTitle>
 									<CardDescription className="text-slate-400">Current & previous cut totals</CardDescription>
@@ -3314,7 +3314,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 						)}
 
 						<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-							<Card className="bg-white/90 border-slate-200">
+							<Card className="chatter-panel">
 								<CardHeader>
 									<CardTitle className="text-sm text-slate-200">Daily Earnings</CardTitle>
 								</CardHeader>
@@ -3391,14 +3391,14 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 										<div className="mt-4 space-y-3 text-sm">
 											<div className="flex items-center justify-between">
 												<span className="text-slate-400">Bonuses (current cut)</span>
-												<span className="text-slate-900 font-semibold tabular-nums">
+												<span className="text-slate-100 font-semibold tabular-nums">
 													{formatCurrency(bonusEntriesTotal + shiftBonusesTotal)}
 												</span>
 											</div>
 											<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-												<div className="rounded border border-slate-200 bg-slate-100/80 p-3">
-													<p className="text-xs uppercase text-slate-500">Shift bonuses</p>
-													<ul className="mt-2 space-y-1 text-sm text-slate-700">
+												<div className="rounded border border-slate-700/60 bg-slate-800/70 p-3">
+													<p className="text-xs uppercase text-slate-300">Shift bonuses</p>
+													<ul className="mt-2 space-y-1 text-sm text-slate-200">
 														{currentCutShiftBonuses.length === 0 && <li>No bonuses</li>}
 														{currentCutShiftBonuses.map((entry) => (
 															<li key={`${entry.date}-${entry.amount}`}>
@@ -3407,9 +3407,9 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 														))}
 													</ul>
 												</div>
-												<div className="rounded border border-slate-200 bg-slate-100/80 p-3">
-													<p className="text-xs uppercase text-slate-500">Double shift</p>
-													<ul className="mt-2 space-y-1 text-sm text-slate-700">
+												<div className="rounded border border-slate-700/60 bg-slate-800/70 p-3">
+													<p className="text-xs uppercase text-slate-300">Double shift</p>
+													<ul className="mt-2 space-y-1 text-sm text-slate-200">
 														{bonusEntriesByType.double_shift.length === 0 && <li>No bonuses</li>}
 														{bonusEntriesByType.double_shift.map((entry) => (
 															<li key={entry.id}>
@@ -3418,9 +3418,9 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 														))}
 													</ul>
 												</div>
-												<div className="rounded border border-slate-200 bg-slate-100/80 p-3">
-													<p className="text-xs uppercase text-slate-500">Holiday bonuses</p>
-													<ul className="mt-2 space-y-1 text-sm text-slate-700">
+												<div className="rounded border border-slate-700/60 bg-slate-800/70 p-3">
+													<p className="text-xs uppercase text-slate-300">Holiday bonuses</p>
+													<ul className="mt-2 space-y-1 text-sm text-slate-200">
 														{bonusEntriesByType.holiday.length === 0 && <li>No bonuses</li>}
 														{bonusEntriesByType.holiday.map((entry) => (
 															<li key={entry.id}>
@@ -3435,7 +3435,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 								</CardContent>
 							</Card>
 
-							<Card className="bg-white/90 border-slate-200">
+							<Card className="chatter-panel">
 								<CardHeader className="flex flex-row items-center justify-between gap-2">
 									<div>
 										<CardTitle className="text-sm text-slate-200">Earnings Calendar</CardTitle>
@@ -3477,7 +3477,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 												.map((p) => (
 													<div
 														key={p.key}
-														className="flex items-center justify-between rounded border border-slate-200 bg-slate-100 px-3 py-2"
+														className="flex items-center justify-between rounded border border-slate-700/60 bg-slate-800/60 px-3 py-2"
 													>
 														<span className="text-slate-300">Cut {format(p.start, "MMM d")} to {format(subDays(p.endExclusive, 1), "MMM d")}</span>
 														<span className="font-semibold text-amber-300">{formatCurrency(p.total, 2)}</span>
