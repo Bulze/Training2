@@ -3006,6 +3006,12 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 
 	const currentCutTotal = currentPeriod?.total ?? 0;
 	const currentCutBonus = currentPeriod?.bonusTotal ?? 0;
+	const previousPeriod = useMemo(() => {
+		if (!currentPeriod) return null;
+		const index = payPeriods.findIndex((p) => p.key === currentPeriod.key);
+		if (index <= 0) return null;
+		return payPeriods[index - 1];
+	}, [currentPeriod, payPeriods]);
 
 	const formatCurrency = (value: unknown, digits = 2) => {
 		const amount = typeof value === "number" ? value : Number(value);
@@ -3137,6 +3143,36 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 								</CardContent>
 							</Card>
 						)}
+						{currentPeriod && (
+							<Card className="bg-slate-900/40 border-slate-800">
+								<CardHeader className="py-4">
+									<CardTitle className="text-sm text-slate-200">Cut Summary</CardTitle>
+									<CardDescription className="text-slate-400">Current & previous cut totals</CardDescription>
+								</CardHeader>
+								<CardContent className="pt-0 space-y-3 text-sm">
+									<div className="flex items-center justify-between">
+										<span className="text-slate-400">
+											Current ({format(currentPeriod.start, "MMM d")} - {format(subDays(currentPeriod.endExclusive, 1), "MMM d")})
+										</span>
+										<span className="text-amber-300 font-semibold tabular-nums">
+											{formatCurrency(currentPeriod.total)}
+										</span>
+									</div>
+									{previousPeriod ? (
+										<div className="flex items-center justify-between">
+											<span className="text-slate-400">
+												Previous ({format(previousPeriod.start, "MMM d")} - {format(subDays(previousPeriod.endExclusive, 1), "MMM d")})
+											</span>
+											<span className="text-amber-300 font-semibold tabular-nums">
+												{formatCurrency(previousPeriod.total)}
+											</span>
+										</div>
+									) : (
+										<div className="text-slate-500">No previous cut available.</div>
+									)}
+								</CardContent>
+							</Card>
+						)}
 
 						<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 							<Card className="bg-slate-900 border-slate-800">
@@ -3256,7 +3292,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 														<div className="flex justify-between text-slate-300">
 															<span>{format(day, "d")}</span>
 															<span className="text-amber-300">
-																{cutoff ? "CUT" : salesAmount ? formatCurrency(salesAmount, 0) : ""}
+																{cutoff ? "CUT" : ""}
 															</span>
 														</div>
 														{cutoff && (
