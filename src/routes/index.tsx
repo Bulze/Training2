@@ -328,7 +328,7 @@ function evaluateAnswerLocally(question: string, idealAnswer: string, userAnswer
 			.toLowerCase()
 			.replace(/[^a-z0-9\s]/g, " ")
 			.split(/\s+/)
-			.filter(Boolean);
+			.filter((token) => token.length >= 2);
 
 	const idealTokens = new Set(toTokens(idealAnswer));
 	const userTokens = new Set(toTokens(userAnswer));
@@ -345,8 +345,10 @@ function evaluateAnswerLocally(question: string, idealAnswer: string, userAnswer
 		if (userTokens.has(token)) overlap += 1;
 	}
 
-	const similarity = overlap / Math.max(idealTokens.size, 1);
-	const isCorrect = similarity >= 0.5;
+	const precision = overlap / Math.max(userTokens.size, 1);
+	const recall = overlap / Math.max(idealTokens.size, 1);
+	const similarity = (precision + recall) / 2;
+	const isCorrect = similarity >= 0.35;
 
 	return {
 		isCorrect,
@@ -2443,17 +2445,79 @@ function AllSubmissionsPanel() {
 		queryFn: () => sessionsOrm.getAllTrainingSessions(),
 	});
 
+	const toEpochSeconds = (value?: string) => {
+		if (!value) return 0;
+		const numeric = Number(value);
+		if (Number.isFinite(numeric)) return numeric;
+		const parsed = Date.parse(value);
+		return Number.isNaN(parsed) ? 0 : Math.floor(parsed / 1000);
+	};
+
+	const completionsByKey = new Map<string, CompletionsModel[]>();
+	for (const completion of allCompletions) {
+		const key = `${completion.user_id}::${completion.video_id}`;
+		const existing = completionsByKey.get(key) || [];
+		existing.push(completion);
+		completionsByKey.set(key, existing);
+	}
+
+	const attemptsByKey = new Map<string, QuizAttemptsModel[]>();
+	for (const attempt of allAttempts) {
+		const key = `${attempt.user_id}::${attempt.video_id}`;
+		const existing = attemptsByKey.get(key) || [];
+		existing.push(attempt);
+		attemptsByKey.set(key, existing);
+	}
+
+	const attemptOnlySubmissions = Array.from(attemptsByKey.entries())
+		.filter(([key]) => !completionsByKey.has(key))
+		.map(([key, attempts]) => {
+			const [user_id, video_id] = key.split("::");
+			const attemptsByQuestion = new Map<string, QuizAttemptsModel>();
+			for (const attempt of attempts) {
+				const existing = attemptsByQuestion.get(attempt.question_id);
+				if (!existing || toEpochSeconds(attempt.attempted_at) >= toEpochSeconds(existing.attempted_at)) {
+					attemptsByQuestion.set(attempt.question_id, attempt);
+				}
+			}
+			const latestAttempts = Array.from(attemptsByQuestion.values());
+			const latestAttempt = latestAttempts.reduce<QuizAttemptsModel | null>((latest, current) => {
+				if (!latest) return current;
+				return toEpochSeconds(current.attempted_at) > toEpochSeconds(latest.attempted_at) ? current : latest;
+			}, null);
+			return {
+				user_id,
+				video_id,
+				latestAttempts,
+				allAttempts: attempts,
+				latestAttempt,
+			};
+		});
+
+	const submissions = [
+		...allCompletions.map((completion) => ({
+			type: "completion" as const,
+			completion,
+			timestamp: toEpochSeconds(completion.completed_at),
+		})),
+		...attemptOnlySubmissions.map((submission) => ({
+			type: "attempt" as const,
+			submission,
+			timestamp: submission.latestAttempt ? toEpochSeconds(submission.latestAttempt.attempted_at) : 0,
+		})),
+	].sort((a, b) => b.timestamp - a.timestamp);
+
 	return (
 		<Card className="bg-slate-900 border-slate-800">
 			<CardHeader>
-				<CardTitle className="text-slate-100">All User Submissions ({allCompletions.length})</CardTitle>
+				<CardTitle className="text-slate-100">All User Submissions ({submissions.length})</CardTitle>
 				<CardDescription className="text-slate-400">View all quiz completions and answers from all users</CardDescription>
 			</CardHeader>
 			<CardContent>
 				<div className="space-y-6">
-					{allCompletions
-						.sort((a, b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime())
-						.map((completion) => {
+					{submissions.map((entry) => {
+						if (entry.type === "completion") {
+							const completion = entry.completion;
 							const user = allUsers.find((u) => u.id === completion.user_id);
 							const video = allVideos.find((v) => v.id === completion.video_id);
 							const session = allSessions.find((s) => s.video_id === completion.video_id);
@@ -2489,7 +2553,7 @@ function AllSubmissionsPanel() {
 										<div className="space-y-4">
 											<div className="text-sm text-slate-600">
 												<p>
-													<strong>Submitted:</strong> {new Date(completion.completed_at).toLocaleString()}
+													<strong>Submitted:</strong> {new Date(toEpochSeconds(completion.completed_at) * 1000).toLocaleString()}
 												</p>
 												<p>
 													<strong>Completion Code:</strong> {completion.completion_code}
@@ -2530,8 +2594,78 @@ function AllSubmissionsPanel() {
 									</CardContent>
 								</Card>
 							);
-						})}
-					{allCompletions.length === 0 && <p className="text-center text-slate-500 py-8">No submissions yet</p>}
+						}
+
+						const { submission } = entry;
+						const user = allUsers.find((u) => u.id === submission.user_id);
+						const video = allVideos.find((v) => v.id === submission.video_id);
+						const session = allSessions.find((s) => s.video_id === submission.video_id);
+						const score = submission.latestAttempts.filter((attempt) => attempt.is_correct).length;
+						const totalQuestions = session?.total_questions || submission.latestAttempts.length;
+						const submittedAt = submission.latestAttempt
+							? new Date(toEpochSeconds(submission.latestAttempt.attempted_at) * 1000).toLocaleString()
+							: "Unknown";
+
+						return (
+							<Card key={`${submission.user_id}::${submission.video_id}`} className="bg-slate-800 border-slate-700">
+								<CardHeader>
+									<div className="flex justify-between items-start">
+										<div>
+											<CardTitle className="text-lg">
+												{user?.name || "Unknown User"} - {video?.title || "Unknown Video"}
+											</CardTitle>
+											<CardDescription>
+												Score: {score}/{totalQuestions} |{" "}
+												<span className="text-yellow-600 font-medium">NO COMPLETION</span>
+											</CardDescription>
+										</div>
+										<Badge variant="secondary">Incomplete</Badge>
+									</div>
+								</CardHeader>
+								<CardContent>
+									<div className="space-y-4">
+										<div className="text-sm text-slate-600">
+											<p>
+												<strong>Latest Attempt:</strong> {submittedAt}
+											</p>
+											<p>
+												<strong>Total Question Attempts:</strong> {submission.allAttempts.length}
+											</p>
+										</div>
+
+										<Separator />
+
+										<div className="space-y-3">
+											<Label className="text-base">Latest Answers:</Label>
+											{submission.latestAttempts.length > 0 ? (
+												submission.latestAttempts.map((attempt, idx) => (
+													<div key={attempt.id} className="p-3 bg-slate-50 rounded-lg">
+														<div className="flex justify-between items-start mb-2">
+															<p className="text-sm font-medium text-slate-700">Answer {idx + 1}</p>
+															<Badge variant={attempt.is_correct ? "default" : "secondary"}>
+																{attempt.is_correct ? "Correct" : "Incorrect"}
+															</Badge>
+														</div>
+														<p className="text-sm text-slate-600 mb-1">
+															<strong>Answer:</strong> {attempt.user_answer}
+														</p>
+														{attempt.ai_feedback && (
+															<p className="text-xs text-slate-500 italic">
+																<strong>AI Feedback:</strong> {attempt.ai_feedback}
+															</p>
+														)}
+													</div>
+												))
+											) : (
+												<p className="text-sm text-slate-500">No individual answers recorded</p>
+											)}
+										</div>
+									</div>
+								</CardContent>
+							</Card>
+						);
+					})}
+					{submissions.length === 0 && <p className="text-center text-slate-500 py-8">No submissions yet</p>}
 				</div>
 			</CardContent>
 		</Card>
@@ -2542,7 +2676,11 @@ function UserView({ user }: { user: UsersModel }) {
 	const userId = user.id;
 	const [selectedVideo, setSelectedVideo] = useState<VideosModel | null>(null);
 	const [showQuiz, setShowQuiz] = useState(false);
-	const [completionResult, setCompletionResult] = useState<CompletionsModel | null>(null);
+	const [completionResult, setCompletionResult] = useState<{
+		completion: CompletionsModel;
+		totalQuestions: number;
+		passThreshold: number;
+	} | null>(null);
 
 	const videosOrm = VideosORM.getInstance();
 	const progressOrm = UserProgressORM.getInstance();
@@ -2573,12 +2711,12 @@ function UserView({ user }: { user: UsersModel }) {
 		setShowQuiz(true);
 	};
 
-	const handleQuizComplete = (result: CompletionsModel) => {
-		setCompletionResult(result);
+	const handleQuizComplete = (result: CompletionsModel, meta: { totalQuestions: number; passThreshold: number }) => {
+		setCompletionResult({ completion: result, ...meta });
 	};
 
 	if (completionResult) {
-		return <CompletionScreen completion={completionResult} onReset={() => {
+		return <CompletionScreen completion={completionResult.completion} totalQuestions={completionResult.totalQuestions} passThreshold={completionResult.passThreshold} onReset={() => {
 			setSelectedVideo(null);
 			setShowQuiz(false);
 			setCompletionResult(null);
@@ -3809,7 +3947,7 @@ function QuizInterface({
 }: {
 	videoId: string;
 	userId: string;
-	onComplete: (completion: CompletionsModel) => void;
+	onComplete: (completion: CompletionsModel, meta: { totalQuestions: number; passThreshold: number }) => void;
 	onBack: () => void;
 }) {
 	const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -3929,25 +4067,22 @@ function QuizInterface({
 				]);
 			}
 
+			queryClient.invalidateQueries({ queryKey: ["allQuizAttempts"] });
+
 			const score = results.filter((r) => r.isCorrect).length;
-			const passed = score >= session.pass_threshold;
+			const [completion] = await completionsOrm.insertCompletions([
+				{
+					user_id: userId,
+					video_id: videoId,
+					completion_code: session.verification_code || `TRAIN-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+					score,
+					completed_at: Math.floor(Date.now() / 1000).toString(),
+				} as CompletionsModel,
+			]);
 
-			if (passed) {
-				const [completion] = await completionsOrm.insertCompletions([
-					{
-						user_id: userId,
-						video_id: videoId,
-						completion_code: session.verification_code || `TRAIN-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
-						score,
-						completed_at: Math.floor(Date.now() / 1000).toString(),
-					} as CompletionsModel,
-				]);
-
-				queryClient.invalidateQueries({ queryKey: ["userCompletions", userId] });
-				onComplete(completion);
-			} else {
-				setError(`You scored ${score}/${sortedQuestions.length}. You need ${session.pass_threshold} correct answers to pass. Please try again.`);
-			}
+			queryClient.invalidateQueries({ queryKey: ["userCompletions", userId] });
+			queryClient.invalidateQueries({ queryKey: ["allCompletions"] });
+			onComplete(completion, { totalQuestions: sortedQuestions.length, passThreshold: session.pass_threshold });
 		} catch (err) {
 			setError(`Failed to evaluate answers: ${err instanceof Error ? err.message : "Unknown error"}`);
 		} finally {
@@ -4057,7 +4192,18 @@ function QuizInterface({
 	);
 }
 
-function CompletionScreen({ completion, onReset }: { completion: CompletionsModel; onReset: () => void }) {
+function CompletionScreen({
+	completion,
+	totalQuestions,
+	passThreshold,
+	onReset,
+}: {
+	completion: CompletionsModel;
+	totalQuestions: number;
+	passThreshold: number;
+	onReset: () => void;
+}) {
+	const belowAverage = completion.score < passThreshold;
 	return (
 		<div className="max-w-2xl mx-auto">
 			<Card className="border-green-800 bg-green-950/30">
@@ -4076,7 +4222,7 @@ function CompletionScreen({ completion, onReset }: { completion: CompletionsMode
 					<div className="bg-slate-800 rounded-lg p-6 space-y-4">
 						<div className="flex justify-between items-center text-lg">
 							<span className="text-slate-600">Your Score:</span>
-							<span className="font-bold text-2xl text-green-600">{completion.score}/10</span>
+							<span className="font-bold text-2xl text-green-600">{completion.score}/{totalQuestions}</span>
 						</div>
 
 						<Separator />
@@ -4104,6 +4250,16 @@ function CompletionScreen({ completion, onReset }: { completion: CompletionsMode
 									<strong>Important:</strong> Save this verification code and submit it to your administrator to confirm your training completion.
 								</AlertDescription>
 							</Alert>
+							<div className="text-sm text-slate-600">
+								<div className="font-medium">Ocena: {completion.score}/{totalQuestions}</div>
+								{belowAverage ? (
+									<div className="text-amber-600">
+										Prosao si, ali rezultat je ispod proseka. Preporucujemo da ponovo pogledas video.
+									</div>
+								) : (
+									<div className="text-green-600">Dobar rezultat. Mozes da nastavis dalje.</div>
+								)}
+							</div>
 						</div>
 					</div>
 

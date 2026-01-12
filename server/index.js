@@ -11,7 +11,7 @@ const DATABASE_URL = process.env.DATABASE_URL || "";
 const USE_POSTGRES = Boolean(DATABASE_URL);
 const GROK_API_KEY = process.env.GROK_API_KEY || "";
 const GROK_MODEL = process.env.GROK_MODEL || "grok-2-latest";
-const GROK_THRESHOLD = Number.parseFloat(process.env.GROK_THRESHOLD || "0.7");
+const GROK_THRESHOLD = Number.parseFloat(process.env.GROK_THRESHOLD || "0.6");
 
 const app = express();
 app.use(cors());
