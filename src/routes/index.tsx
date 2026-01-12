@@ -1574,11 +1574,25 @@ function PayrollPanel() {
 			}
 
 			const percentValue = Number(defaultPercent) || 9;
-			const preparedEmployees = (data.employees || []).map((emp) => ({
-				...emp,
-				percent: percentValue / 100,
-				penalty: 0,
-			}));
+			const percentByEmployee = new Map<string, number>();
+			for (const existing of employees) {
+				const key = (existing.employee || "").toLowerCase().trim();
+				if (!key) continue;
+				const existingPercent = Number(existing.percent);
+				if (Number.isFinite(existingPercent)) {
+					percentByEmployee.set(key, existingPercent);
+				}
+			}
+			const preparedEmployees = (data.employees || []).map((emp) => {
+				const key = (emp.employee || "").toLowerCase().trim();
+				const overridePercent = key ? percentByEmployee.get(key) : undefined;
+				const percent = Number.isFinite(overridePercent) ? overridePercent : percentValue / 100;
+				return {
+					...emp,
+					percent,
+					penalty: 0,
+				};
+			});
 
 			setEmployees(preparedEmployees);
 			setPpvDay(data.ppv_day || {});
