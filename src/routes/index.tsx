@@ -143,6 +143,12 @@ type PayrollEmployeeFeedback = {
 
 type ChatterAdminMeta = {
 	manual_bonus?: number;
+	bonus_entries?: Array<{
+		id: string;
+		type: "shift" | "double_shift" | "holiday";
+		amount: number;
+		date: string;
+	}>;
 	manual_penalty?: number;
 	admin_notes?: string;
 	admin_review?: string;
@@ -227,6 +233,7 @@ const fetchChatterAdminMeta = async (userId: string) => {
 	}
 	const record = valuesToObject(structured) as {
 		manual_bonus?: number;
+		bonus_entries?: ChatterAdminMeta["bonus_entries"];
 		manual_penalty?: number;
 		admin_notes?: string;
 		admin_review?: string;
@@ -235,6 +242,7 @@ const fetchChatterAdminMeta = async (userId: string) => {
 	return {
 		meta: {
 			manual_bonus: Number(record.manual_bonus ?? 0),
+			bonus_entries: Array.isArray(record.bonus_entries) ? record.bonus_entries : [],
 			manual_penalty: Number(record.manual_penalty ?? 0),
 			admin_notes: String(record.admin_notes ?? ""),
 			admin_review: String(record.admin_review ?? ""),
@@ -248,6 +256,7 @@ const saveChatterAdminMeta = async (userId: string, meta: ChatterAdminMeta) => {
 	const data = CreateData([
 		CreateValue(DataType.string, userId, "user_id"),
 		CreateValue(DataType.number, Number(meta.manual_bonus ?? 0), "manual_bonus"),
+		CreateValue(DataType.object, meta.bonus_entries ?? [], "bonus_entries"),
 		CreateValue(DataType.number, Number(meta.manual_penalty ?? 0), "manual_penalty"),
 		CreateValue(DataType.string, meta.admin_notes ?? "", "admin_notes"),
 		CreateValue(DataType.string, meta.admin_review ?? "", "admin_review"),
@@ -2166,6 +2175,7 @@ function TrainingRolesPanel() {
 	const [search, setSearch] = useState("");
 	const [metaDrafts, setMetaDrafts] = useState<Record<string, ChatterAdminMeta>>({});
 	const [metaUpdatedAt, setMetaUpdatedAt] = useState<Record<string, string | null>>({});
+	const [bonusDrafts, setBonusDrafts] = useState<Record<string, { type: "shift" | "double_shift" | "holiday"; amount: number; date: string }>>({});
 
 	const { data: users = [] } = useQuery({
 		queryKey: ["allUsers"],
@@ -2215,7 +2225,7 @@ function TrainingRolesPanel() {
 		const meta = selectedMetaResponse?.meta;
 		setMetaDrafts((prev) => ({
 			...prev,
-			[selectedUserId]: meta ?? { manual_bonus: 0, manual_penalty: 0, admin_notes: "", admin_review: "" },
+			[selectedUserId]: meta ?? { manual_bonus: 0, bonus_entries: [], manual_penalty: 0, admin_notes: "", admin_review: "" },
 		}));
 		setMetaUpdatedAt((prev) => ({
 			...prev,
@@ -2228,6 +2238,48 @@ function TrainingRolesPanel() {
 			...prev,
 			[userId]: { ...(prev[userId] ?? {}), ...patch },
 		}));
+	};
+
+	const getBonusLabel = (type: "shift" | "double_shift" | "holiday") => {
+		if (type === "double_shift") return "Double shift bonus";
+		if (type === "holiday") return "Holiday bonus";
+		return "Shift bonus";
+	};
+
+	const getBonusDraft = (userId: string) =>
+		bonusDrafts[userId] ?? {
+			type: "shift" as const,
+			amount: 0,
+			date: format(new Date(), "yyyy-MM-dd"),
+		};
+
+	const updateBonusDraft = (
+		userId: string,
+		patch: Partial<{ type: "shift" | "double_shift" | "holiday"; amount: number; date: string }>,
+	) => {
+		setBonusDrafts((prev) => ({
+			...prev,
+			[userId]: { ...getBonusDraft(userId), ...patch },
+		}));
+	};
+
+	const addBonusEntry = (userId: string) => {
+		const draft = getBonusDraft(userId);
+		if (!draft.date || !Number.isFinite(draft.amount) || draft.amount <= 0) return;
+		const entry = {
+			id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+			type: draft.type,
+			amount: Number(draft.amount),
+			date: draft.date,
+		};
+		const existing = metaDrafts[userId]?.bonus_entries ?? [];
+		updateMeta(userId, { bonus_entries: [...existing, entry] });
+		updateBonusDraft(userId, { amount: 0 });
+	};
+
+	const removeBonusEntry = (userId: string, entryId: string) => {
+		const existing = metaDrafts[userId]?.bonus_entries ?? [];
+		updateMeta(userId, { bonus_entries: existing.filter((entry) => entry.id !== entryId) });
 	};
 
 	const filteredUsers = useMemo(() => {
@@ -2297,8 +2349,9 @@ function TrainingRolesPanel() {
 						const draft = edits[selectedUser.id] || {};
 						const role = (draft.role ?? selectedUser.role ?? DEFAULT_ROLE) as string;
 						const inflow = (draft.inflow_username ?? selectedUser.inflow_username ?? "") as string;
-						const meta = metaDrafts[selectedUser.id] ?? { manual_bonus: 0, manual_penalty: 0, admin_notes: "", admin_review: "" };
+						const meta = metaDrafts[selectedUser.id] ?? { manual_bonus: 0, bonus_entries: [], manual_penalty: 0, admin_notes: "", admin_review: "" };
 						const metaUpdated = metaUpdatedAt[selectedUser.id] ?? null;
+						const bonusDraft = getBonusDraft(selectedUser.id);
 
 						return (
 							<Card className="bg-slate-900/40 border-slate-800">
@@ -2338,17 +2391,71 @@ function TrainingRolesPanel() {
 
 									<Separator className="bg-slate-800" />
 
-									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div className="space-y-3">
+										<Label>Bonus entries</Label>
 										<div className="space-y-2">
-											<Label>Manual Bonus ($)</Label>
-											<Input
-												type="number"
-												min={0}
-												step={0.01}
-												value={String(meta.manual_bonus ?? 0)}
-												onChange={(e) => updateMeta(selectedUser.id, { manual_bonus: Number(e.target.value || 0) })}
-											/>
+											{(meta.bonus_entries ?? []).length === 0 && (
+												<p className="text-sm text-slate-500">No bonuses added yet.</p>
+											)}
+											{(meta.bonus_entries ?? []).map((entry) => (
+												<div
+													key={entry.id}
+													className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm"
+												>
+													<div className="text-slate-200">
+														{getBonusLabel(entry.type)} • {entry.date} • ${Number(entry.amount).toFixed(2)}
+													</div>
+													<Button
+														type="button"
+														variant="outline"
+														size="sm"
+														onClick={() => removeBonusEntry(selectedUser.id, entry.id)}
+													>
+														Remove
+													</Button>
+												</div>
+											))}
 										</div>
+										<div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+											<div className="space-y-2">
+												<Label>Type</Label>
+												<select
+													className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+													value={bonusDraft.type}
+													onChange={(e) => updateBonusDraft(selectedUser.id, { type: e.target.value as "shift" | "double_shift" | "holiday" })}
+												>
+													<option value="shift">Shift bonus</option>
+													<option value="double_shift">Double shift bonus</option>
+													<option value="holiday">Holiday bonus</option>
+												</select>
+											</div>
+											<div className="space-y-2">
+												<Label>Date</Label>
+												<Input
+													type="date"
+													value={bonusDraft.date}
+													onChange={(e) => updateBonusDraft(selectedUser.id, { date: e.target.value })}
+												/>
+											</div>
+											<div className="space-y-2">
+												<Label>Amount ($)</Label>
+												<Input
+													type="number"
+													min={0}
+													step={0.01}
+													value={String(bonusDraft.amount)}
+													onChange={(e) => updateBonusDraft(selectedUser.id, { amount: Number(e.target.value || 0) })}
+												/>
+											</div>
+											<div className="space-y-2 flex items-end">
+												<Button type="button" className="w-full" onClick={() => addBonusEntry(selectedUser.id)}>
+													Add bonus
+												</Button>
+											</div>
+										</div>
+									</div>
+
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 										<div className="space-y-2">
 											<Label>Manual Penalty ($)</Label>
 											<Input
@@ -2840,8 +2947,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 
 	const percent = Number(employee?.percent ?? 0.09);
 	const chatterMeta = chatterMetaResponse?.meta ?? null;
-	const manualBonus = Number(chatterMeta?.manual_bonus ?? 0);
-	const manualPenalty = Number(chatterMeta?.manual_penalty ?? 0);
+	const bonusEntries = Array.isArray(chatterMeta?.bonus_entries) ? chatterMeta.bonus_entries : [];
 	const sales = Number(employee?.sales ?? 0);
 
 	const computeShiftBonus = (value: number) => {
@@ -3013,8 +3119,42 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		return payPeriods.find((p) => reference >= p.start && reference < p.endExclusive) || payPeriods[payPeriods.length - 1];
 	}, [payPeriods, snapshot, dailyEarned]);
 
-	const currentCutTotal = currentPeriod?.total ?? 0;
-	const currentCutBonus = currentPeriod?.bonusTotal ?? 0;
+	const currentCutBonusEntries = useMemo(() => {
+		if (!currentPeriod) return [];
+		const start = currentPeriod.start;
+		const endExclusive = currentPeriod.endExclusive;
+		return bonusEntries.filter((entry) => {
+			if (!entry?.date) return false;
+			let date: Date;
+			try {
+				date = parseISO(entry.date);
+			} catch {
+				return false;
+			}
+			return date >= start && date < endExclusive;
+		});
+	}, [bonusEntries, currentPeriod]);
+
+	const bonusEntriesTotal = useMemo(
+		() => currentCutBonusEntries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0),
+		[currentCutBonusEntries],
+	);
+
+	const bonusEntriesByType = useMemo(() => {
+		const grouped: Record<"shift" | "double_shift" | "holiday", typeof currentCutBonusEntries> = {
+			shift: [],
+			double_shift: [],
+			holiday: [],
+		};
+		for (const entry of currentCutBonusEntries) {
+			const type = entry.type ?? "shift";
+			if (type in grouped) grouped[type as "shift" | "double_shift" | "holiday"].push(entry);
+		}
+		return grouped;
+	}, [currentCutBonusEntries]);
+
+	const currentCutTotal = (currentPeriod?.total ?? 0) + bonusEntriesTotal;
+	const currentCutBonus = (currentPeriod?.bonusTotal ?? 0) + bonusEntriesTotal;
 	const previousPeriod = useMemo(() => {
 		if (!currentPeriod) return null;
 		const index = payPeriods.findIndex((p) => p.key === currentPeriod.key);
@@ -3029,7 +3169,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	};
 
 	return (
-		<Card className="chatter-dashboard backdrop-blur">
+		<Card className="chatter-dashboard chatter-light backdrop-blur">
 			<CardHeader className="space-y-1">
 				<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 					<div className="min-w-0">
@@ -3081,7 +3221,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				{employee && (
 					<div className="space-y-6">
 						{(chatterMeta?.admin_review || "").trim() && (
-							<Card className="bg-slate-900/40 border-slate-800">
+							<Card className="bg-white/80 border-slate-200">
 								<CardHeader className="py-4">
 									<CardTitle className="text-sm text-slate-200">Admin review</CardTitle>
 									<CardDescription className="text-slate-400">Feedback from management</CardDescription>
@@ -3118,7 +3258,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 								<CardHeader className="pb-2">
 									<CardTitle className="text-xs uppercase tracking-wide text-slate-300">Current Cut</CardTitle>
 									<CardDescription className="text-slate-400">
-										{(percent * 100).toFixed(2)}% | manual bonus {formatCurrency(manualBonus)} | manual penalty {formatCurrency(manualPenalty)}
+										{(percent * 100).toFixed(2)}% | includes shift bonuses + admin bonuses
 									</CardDescription>
 								</CardHeader>
 								<CardContent>
@@ -3129,7 +3269,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 							</Card>
 						</div>
 						{currentPeriod && (
-							<Card className="bg-slate-900/40 border-slate-800">
+							<Card className="bg-white/80 border-slate-200">
 								<CardHeader className="py-4">
 									<CardTitle className="text-sm text-slate-200">Cut Summary</CardTitle>
 									<CardDescription className="text-slate-400">Current & previous cut totals</CardDescription>
@@ -3160,7 +3300,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 						)}
 
 						<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-							<Card className="bg-slate-900 border-slate-800">
+							<Card className="bg-white/90 border-slate-200">
 								<CardHeader>
 									<CardTitle className="text-sm text-slate-200">Daily Earnings</CardTitle>
 								</CardHeader>
@@ -3222,7 +3362,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 											</div>
 											<Progress
 												value={Math.min(100, Math.max(0, (monthEstimate.estimate / monthEstimate.ideal) * 100))}
-												className="h-2 bg-slate-800"
+												className="h-2 bg-slate-200"
 											/>
 											<div className="flex items-center justify-between">
 												<span className="text-slate-400">Ideal month</span>
@@ -3230,13 +3370,58 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 													{formatCurrency(monthEstimate.ideal)}
 												</span>
 											</div>
-											<Progress value={100} className="h-2 bg-slate-800" />
+											<Progress value={100} className="h-2 bg-slate-200" />
+										</div>
+									)}
+									{currentPeriod && (
+										<div className="mt-4 space-y-3 text-sm">
+											<div className="flex items-center justify-between">
+												<span className="text-slate-400">Bonuses (current cut)</span>
+												<span className="text-slate-900 font-semibold tabular-nums">
+													{formatCurrency(bonusEntriesTotal)}
+												</span>
+											</div>
+											<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+												<div className="rounded border border-slate-200 bg-white/70 p-3">
+													<p className="text-xs uppercase text-slate-500">Shift bonuses</p>
+													<ul className="mt-2 space-y-1 text-sm text-slate-700">
+														{bonusEntriesByType.shift.length === 0 && <li>No bonuses</li>}
+														{bonusEntriesByType.shift.map((entry) => (
+															<li key={entry.id}>
+																{entry.date} • ${Number(entry.amount || 0).toFixed(2)}
+															</li>
+														))}
+													</ul>
+												</div>
+												<div className="rounded border border-slate-200 bg-white/70 p-3">
+													<p className="text-xs uppercase text-slate-500">Double shift</p>
+													<ul className="mt-2 space-y-1 text-sm text-slate-700">
+														{bonusEntriesByType.double_shift.length === 0 && <li>No bonuses</li>}
+														{bonusEntriesByType.double_shift.map((entry) => (
+															<li key={entry.id}>
+																{entry.date} • ${Number(entry.amount || 0).toFixed(2)}
+															</li>
+														))}
+													</ul>
+												</div>
+												<div className="rounded border border-slate-200 bg-white/70 p-3">
+													<p className="text-xs uppercase text-slate-500">Holiday bonuses</p>
+													<ul className="mt-2 space-y-1 text-sm text-slate-700">
+														{bonusEntriesByType.holiday.length === 0 && <li>No bonuses</li>}
+														{bonusEntriesByType.holiday.map((entry) => (
+															<li key={entry.id}>
+																{entry.date} • ${Number(entry.amount || 0).toFixed(2)}
+															</li>
+														))}
+													</ul>
+												</div>
+											</div>
 										</div>
 									)}
 								</CardContent>
 							</Card>
 
-							<Card className="bg-slate-900 border-slate-800">
+							<Card className="bg-white/90 border-slate-200">
 								<CardHeader className="flex flex-row items-center justify-between gap-2">
 									<div>
 										<CardTitle className="text-sm text-slate-200">Earnings Calendar</CardTitle>
@@ -3278,7 +3463,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 												.map((p) => (
 													<div
 														key={p.key}
-														className="flex items-center justify-between rounded border border-slate-700 bg-slate-900/30 px-3 py-2"
+														className="flex items-center justify-between rounded border border-slate-200 bg-slate-100 px-3 py-2"
 													>
 														<span className="text-slate-300">Cut {format(p.start, "MMM d")} to {format(subDays(p.endExclusive, 1), "MMM d")}</span>
 														<span className="font-semibold text-amber-300">{formatCurrency(p.total, 2)}</span>
@@ -3311,8 +3496,8 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 														key={key}
 														className={[
 															"rounded border p-3 min-h-[84px] calendar-cell",
-															"border-slate-700",
-															cutoff ? "bg-amber-500/10 border-amber-500/40" : "bg-slate-900/20",
+															"border-slate-200",
+															cutoff ? "bg-amber-500/10 border-amber-500/40" : "bg-white/70",
 															salesClass,
 															muted ? "opacity-40" : "",
 														].join(" ")}
