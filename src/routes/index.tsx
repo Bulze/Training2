@@ -2727,9 +2727,9 @@ function AllSubmissionsPanel() {
 												<CardDescription>
 													Score: {completion.score}/{session?.total_questions || "?"} |{" "}
 													{passed ? (
-														<span className="text-green-600 font-medium">PASSED</span>
+														<span className="text-slate-200 font-medium">PASSED</span>
 													) : (
-														<span className="text-red-600 font-medium">FAILED</span>
+														<span className="text-slate-200 font-medium">FAILED</span>
 													)}
 												</CardDescription>
 											</div>
@@ -2740,7 +2740,7 @@ function AllSubmissionsPanel() {
 									</CardHeader>
 									<CardContent>
 										<div className="space-y-4">
-											<div className="text-sm text-slate-600">
+											<div className="text-sm text-slate-300">
 												<p>
 													<strong>Submitted:</strong> {new Date(toEpochSeconds(completion.completed_at) * 1000).toLocaleString()}
 												</p>
@@ -2758,25 +2758,25 @@ function AllSubmissionsPanel() {
 												<Label className="text-base">Individual Answers:</Label>
 												{userAttempts.length > 0 ? (
 													userAttempts.map((attempt, idx) => (
-														<div key={attempt.id} className="p-3 bg-slate-50 rounded-lg">
+														<div key={attempt.id} className="p-3 chatter-panel rounded-lg">
 															<div className="flex justify-between items-start mb-2">
-																<p className="text-sm font-medium text-slate-700">Answer {idx + 1}</p>
+																<p className="text-sm font-medium text-slate-200">Answer {idx + 1}</p>
 																<Badge variant={attempt.is_correct ? "default" : "secondary"}>
 																	{attempt.is_correct ? "Correct" : "Incorrect"}
 																</Badge>
 															</div>
-															<p className="text-sm text-slate-600 mb-1">
+															<p className="text-sm text-slate-300 mb-1">
 																<strong>Answer:</strong> {attempt.user_answer}
 															</p>
 															{attempt.ai_feedback && (
-																<p className="text-xs text-slate-500 italic">
+																<p className="text-xs text-slate-400 italic">
 																	<strong>AI Feedback:</strong> {attempt.ai_feedback}
 																</p>
 															)}
 														</div>
 													))
 												) : (
-													<p className="text-sm text-slate-500">No individual answers recorded</p>
+													<p className="text-sm text-slate-400">No individual answers recorded</p>
 												)}
 											</div>
 										</div>
@@ -2796,7 +2796,7 @@ function AllSubmissionsPanel() {
 							: "Unknown";
 
 						return (
-							<Card key={`${submission.user_id}::${submission.video_id}`} className="bg-slate-800 border-slate-700">
+							<Card key={`${submission.user_id}::${submission.video_id}`} className="chatter-panel">
 								<CardHeader>
 									<div className="flex justify-between items-start">
 										<div>
@@ -2805,7 +2805,7 @@ function AllSubmissionsPanel() {
 											</CardTitle>
 											<CardDescription>
 												Score: {score}/{totalQuestions} |{" "}
-												<span className="text-yellow-600 font-medium">NO COMPLETION</span>
+												<span className="text-slate-200 font-medium">NO COMPLETION</span>
 											</CardDescription>
 										</div>
 										<Badge variant="secondary">Incomplete</Badge>
@@ -2813,7 +2813,7 @@ function AllSubmissionsPanel() {
 								</CardHeader>
 								<CardContent>
 									<div className="space-y-4">
-										<div className="text-sm text-slate-600">
+										<div className="text-sm text-slate-300">
 											<p>
 												<strong>Latest Attempt:</strong> {submittedAt}
 											</p>
@@ -2828,25 +2828,25 @@ function AllSubmissionsPanel() {
 											<Label className="text-base">Latest Answers:</Label>
 											{submission.latestAttempts.length > 0 ? (
 												submission.latestAttempts.map((attempt, idx) => (
-													<div key={attempt.id} className="p-3 bg-slate-50 rounded-lg">
+													<div key={attempt.id} className="p-3 chatter-panel rounded-lg">
 														<div className="flex justify-between items-start mb-2">
-															<p className="text-sm font-medium text-slate-700">Answer {idx + 1}</p>
+															<p className="text-sm font-medium text-slate-200">Answer {idx + 1}</p>
 															<Badge variant={attempt.is_correct ? "default" : "secondary"}>
 																{attempt.is_correct ? "Correct" : "Incorrect"}
 															</Badge>
 														</div>
-														<p className="text-sm text-slate-600 mb-1">
+														<p className="text-sm text-slate-300 mb-1">
 															<strong>Answer:</strong> {attempt.user_answer}
 														</p>
 														{attempt.ai_feedback && (
-															<p className="text-xs text-slate-500 italic">
+															<p className="text-xs text-slate-400 italic">
 																<strong>AI Feedback:</strong> {attempt.ai_feedback}
 															</p>
 														)}
 													</div>
 												))
 											) : (
-												<p className="text-sm text-slate-500">No individual answers recorded</p>
+												<p className="text-sm text-slate-400">No individual answers recorded</p>
 											)}
 										</div>
 									</div>

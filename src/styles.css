@@ -944,6 +944,31 @@ code {
 	color: #e7ebf0;
 }
 
+.app-shell .payroll-app .btn,
+.app-shell .payroll-app .btn.accent,
+.app-shell .payroll-app .btn.pink,
+.app-shell .payroll-app .btn.ghost {
+	background: #2f3a4b;
+	border: 1px solid #3c475b;
+	color: #e7ebf0;
+	box-shadow: none;
+}
+
+.app-shell .payroll-app .btn:hover,
+.app-shell .payroll-app .btn.accent:hover,
+.app-shell .payroll-app .btn.pink:hover,
+.app-shell .payroll-app .btn.ghost:hover {
+	background: #374459;
+}
+
+.app-shell .payroll-app .switch input:checked + .slider {
+	background: #3c475b;
+}
+
+.app-shell .payroll-app .switch input:checked + .slider:before {
+	background: #e6edf6;
+}
+
 .app-shell .payroll-app .controls,
 .app-shell .payroll-app .table-wrap,
 .app-shell .payroll-app .detail,
@@ -959,6 +984,11 @@ code {
 	color: #e7ebf0;
 }
 
+.app-shell .payroll-app th,
+.app-shell .payroll-app td {
+	color: #e7ebf0;
+}
+
 .app-shell .payroll-app thead {
 	background: #2f3a4b;
 }
@@ -969,4 +999,50 @@ code {
 
 .app-shell .payroll-app tbody tr:hover {
 	background: #344154;
+}
+
+.app-shell .payroll-app input,
+.app-shell .payroll-app select {
+	background: #2b3445;
+	border-color: #3c475b;
+	color: #e7ebf0;
+}
+
+.app-shell .payroll-app input::placeholder {
+	color: #9aa6b6;
+}
+
+.app-shell .payroll-app .tab-btn {
+	background: #2f3a4b;
+	border: 1px solid #3c475b;
+	color: #e7ebf0;
+}
+
+.app-shell .payroll-app .tab-btn.active {
+	background: #374459;
+	color: #ffffff;
+}
+
+.app-shell .payroll-app .status {
+	background: #2f3a4b;
+	border-color: #3c475b;
+	color: #e7ebf0;
+}
+
+.app-shell .payroll-app .field input[type="file"] {
+	color: #e7ebf0;
+}
+
+.app-shell .payroll-app .field input[type="date"] {
+	color-scheme: dark;
+}
+
+.app-shell .payroll-app .file-row input {
+	background: #2b3445;
+	border-color: #3c475b;
+	color: #e7ebf0;
+}
+
+.app-shell .payroll-app .file-row input::placeholder {
+	color: #9aa6b6;
 }
