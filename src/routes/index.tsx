@@ -3141,6 +3141,16 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		};
 	}, [calendarMonth, dailyEarned]);
 
+	const getMonthSales = (monthStart: Date) => {
+		const monthEnd = endOfMonth(monthStart);
+		return dailyEarned.reduce((sum, entry) => {
+			if (entry.date >= monthStart && entry.date <= monthEnd) {
+				return sum + Number(entry.sales || 0);
+			}
+			return sum;
+		}, 0);
+	};
+
 	const payPeriods = useMemo(() => {
 		if (!dailyEarned.length) return [];
 		const first = dailyEarned[0].date;
@@ -3260,16 +3270,6 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		}
 		return grouped;
 	}, [currentCutBonusEntries]);
-
-	const getMonthSales = (monthStart: Date) => {
-		const monthEnd = endOfMonth(monthStart);
-		return dailyEarned.reduce((sum, entry) => {
-			if (entry.date >= monthStart && entry.date <= monthEnd) {
-				return sum + Number(entry.sales || 0);
-			}
-			return sum;
-		}, 0);
-	};
 
 	const performanceBonusCurrentCut = useMemo(() => {
 		if (!currentPeriod) return 0;
