@@ -3148,7 +3148,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 								</CardHeader>
 								<CardContent>
 									{dailyEarned.length ? (
-										<ResponsiveContainer width="100%" height={240}>
+										<ResponsiveContainer width="100%" height={260}>
 											<LineChart
 												data={dailyEarned.map((d) => ({
 													date: d.dateKey,
@@ -3156,7 +3156,14 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 													sales: d.sales,
 													bonus: d.bonus,
 												}))}
+												margin={{ top: 16, right: 16, left: 8, bottom: 8 }}
 											>
+												<defs>
+													<linearGradient id="earningsGlow" x1="0" y1="0" x2="1" y2="0">
+														<stop offset="0%" stopColor="#38bdf8" stopOpacity={0.85} />
+														<stop offset="100%" stopColor="#22c55e" stopOpacity={0.85} />
+													</linearGradient>
+												</defs>
 												<CartesianGrid stroke="rgba(31,42,68,0.4)" />
 												<XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 11 }} />
 												<YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
@@ -3167,13 +3174,20 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 														if (name === "bonus") return [`$${Number(value).toFixed(2)}`, "bonus"];
 														return [String(value), String(name)];
 													}}
+													contentStyle={{
+														background: "rgba(10, 16, 34, 0.9)",
+														border: "1px solid rgba(86, 104, 140, 0.5)",
+														borderRadius: "10px",
+														color: "#e2e8f0",
+													}}
 												/>
 												<Line
 													type="monotone"
 													dataKey="earned"
-													stroke="#fbbf24"
-													strokeWidth={2}
-													dot={false}
+													stroke="url(#earningsGlow)"
+													strokeWidth={3}
+													dot={{ r: 3, stroke: "#e2e8f0", strokeWidth: 1, fill: "#38bdf8" }}
+													activeDot={{ r: 5, stroke: "#22c55e", strokeWidth: 2, fill: "#0b1224" }}
 												/>
 											</LineChart>
 										</ResponsiveContainer>
@@ -3234,7 +3248,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 										</div>
 									)}
 									{calendarMonth ? (
-										<div className="grid grid-cols-7 gap-2 text-xs">
+										<div className="grid grid-cols-7 gap-3 text-xs calendar-grid">
 											{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
 												<div key={d} className="text-slate-400 text-center">
 													{d}
@@ -3246,18 +3260,26 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 												const dayBonus = bonusByDay.get(key) ?? 0;
 												const cutoff = payPeriodByCutoff.get(key);
 												const muted = !isSameMonth(day, calendarMonth);
+												const salesClass = salesAmount >= 1000
+													? "calendar-cell-strong"
+													: salesAmount >= 500
+														? "calendar-cell-mid"
+														: salesAmount > 0 && salesAmount < 200
+															? "calendar-cell-low"
+															: "";
 												return (
 													<div
 														key={key}
 														className={[
-															"rounded border p-2 min-h-[64px]",
+															"rounded border p-3 min-h-[84px] calendar-cell",
 															"border-slate-700",
 															cutoff ? "bg-amber-500/10 border-amber-500/40" : "bg-slate-900/20",
+															salesClass,
 															muted ? "opacity-40" : "",
 														].join(" ")}
 													>
 														<div className="flex justify-between text-slate-300">
-															<span>{format(day, "d")}</span>
+															<span className="calendar-day">{format(day, "d")}</span>
 															<span className="text-amber-300">
 																{cutoff ? "CUT" : ""}
 															</span>
@@ -3268,12 +3290,12 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 															</div>
 														)}
 														{salesAmount > 0 && (
-															<div className="mt-1 text-slate-400">
+															<div className="mt-1 text-slate-300 calendar-meta">
 																Sales {formatCurrency(salesAmount, 2)}
 															</div>
 														)}
 														{dayBonus > 0 && (
-															<div className="mt-1 text-sky-300">
+															<div className="mt-1 text-sky-300 calendar-meta">
 																Bonus {formatCurrency(dayBonus, 2)}
 															</div>
 														)}

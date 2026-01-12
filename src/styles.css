@@ -236,6 +236,40 @@ code {
 	box-shadow: 0 12px 24px rgba(6, 11, 28, 0.4);
 }
 
+.calendar-grid {
+	grid-auto-rows: 1fr;
+}
+
+.calendar-cell {
+	transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.calendar-cell:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 10px 22px rgba(6, 12, 30, 0.35);
+}
+
+.calendar-cell-low {
+	background: linear-gradient(180deg, rgba(248, 113, 113, 0.12), rgba(15, 23, 42, 0.05));
+}
+
+.calendar-cell-mid {
+	background: linear-gradient(180deg, rgba(251, 191, 36, 0.16), rgba(15, 23, 42, 0.05));
+}
+
+.calendar-cell-strong {
+	background: linear-gradient(180deg, rgba(34, 197, 94, 0.18), rgba(15, 23, 42, 0.05));
+}
+
+.calendar-day {
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.calendar-meta {
+	font-size: 12px;
+}
+
 .payroll-app,
 .payroll-app * {
 	box-sizing: border-box;
