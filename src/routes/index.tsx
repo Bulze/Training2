@@ -2939,7 +2939,7 @@ function UserView({ user }: { user: UsersModel }) {
 			{user.role === "chatter" && (
 				<ChatterDashboard user={user} />
 			)}
-			<Card className="bg-slate-900 border-slate-800">
+			<Card className="chatter-panel">
 				<CardHeader>
 					<CardTitle className="text-slate-100">Available Training Videos</CardTitle>
 					<CardDescription className="text-slate-400">Select a video to begin your training</CardDescription>
@@ -2953,7 +2953,7 @@ function UserView({ user }: { user: UsersModel }) {
 							return (
 								<Card
 									key={video.id}
-									className="bg-slate-800 border-slate-700 cursor-pointer hover:shadow-lg hover:shadow-slate-700/50 transition-shadow"
+									className="stat-card cursor-pointer hover:shadow-lg hover:shadow-slate-700/40 transition-shadow"
 									onClick={() => handleSelectVideo(video)}
 								>
 									<CardHeader>
@@ -2979,11 +2979,11 @@ function UserView({ user }: { user: UsersModel }) {
 											<div className="mt-3 pt-3 border-t">
 												<div className="flex justify-between text-sm">
 													<span>Score:</span>
-													<span className="font-semibold">{completion.score}/10</span>
+													<span className="font-semibold text-slate-100">{completion.score}/10</span>
 												</div>
 												<div className="flex justify-between text-sm mt-1">
 													<span>Code:</span>
-													<span className="font-mono font-bold">{completion.completion_code}</span>
+													<span className="font-mono font-bold text-slate-100">{completion.completion_code}</span>
 												</div>
 											</div>
 										)}
@@ -4470,8 +4470,8 @@ function QuizInterface({
 		(completedQuestions.size === sortedQuestions.length - 1 && answers[currentQuestionIndex]?.trim());
 
 	return (
-		<div className="max-w-3xl mx-auto space-y-6 quiz-shell">
-			<Card className="quiz-card">
+		<div className="max-w-3xl mx-auto space-y-6 quiz-shell chatter-neo">
+			<Card className="quiz-card chatter-panel">
 				<CardHeader>
 					<div className="flex justify-between items-center">
 						<div>
@@ -4574,7 +4574,7 @@ function CompletionScreen({
 	const belowAverage = completion.score < passThreshold;
 	return (
 		<div className="max-w-2xl mx-auto">
-			<Card className="quiz-card border-green-800">
+			<Card className="quiz-card border-green-800 chatter-panel">
 				<CardHeader className="text-center">
 					<div className="flex justify-center mb-4">
 						<div className="w-20 h-20 bg-green-600 rounded-full flex items-center justify-center">
