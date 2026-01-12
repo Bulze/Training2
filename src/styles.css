@@ -194,14 +194,14 @@ code {
 }
 
 .chatter-dashboard {
-	background: #eef1f5;
-	border: 1px solid #d1d6e0;
+	background: #e3e6ec;
+	border: 1px solid #c7ccd6;
 	box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
 }
 
 .stat-card {
-	border: 1px solid #d8dde8;
-	background: linear-gradient(160deg, rgba(248, 250, 252, 0.95), rgba(236, 240, 246, 0.92));
+	border: 1px solid #cfd5e0;
+	background: linear-gradient(160deg, rgba(240, 243, 248, 0.96), rgba(226, 230, 238, 0.94));
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
@@ -730,8 +730,8 @@ code {
 }
 
 .chatter-light .calendar-cell {
-	border-color: #e2e8f0;
-	background: #f2f5f9;
+	border-color: #d5dbe6;
+	background: #eef2f7;
 }
 
 .chatter-light .calendar-cell-low {

@@ -3135,6 +3135,20 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		});
 	}, [bonusEntries, currentPeriod]);
 
+	const currentCutShiftBonuses = useMemo(() => {
+		if (!currentPeriod) return [];
+		const start = currentPeriod.start;
+		const endExclusive = currentPeriod.endExclusive;
+		return dailyEarned
+			.filter((entry) => entry.date >= start && entry.date < endExclusive && entry.bonus > 0)
+			.map((entry) => ({ date: entry.dateKey, amount: entry.bonus }));
+	}, [currentPeriod, dailyEarned]);
+
+	const shiftBonusesTotal = useMemo(
+		() => currentCutShiftBonuses.reduce((sum, entry) => sum + Number(entry.amount || 0), 0),
+		[currentCutShiftBonuses],
+	);
+
 	const bonusEntriesTotal = useMemo(
 		() => currentCutBonusEntries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0),
 		[currentCutBonusEntries],
@@ -3378,22 +3392,22 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 											<div className="flex items-center justify-between">
 												<span className="text-slate-400">Bonuses (current cut)</span>
 												<span className="text-slate-900 font-semibold tabular-nums">
-													{formatCurrency(bonusEntriesTotal)}
+													{formatCurrency(bonusEntriesTotal + shiftBonusesTotal)}
 												</span>
 											</div>
 											<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-												<div className="rounded border border-slate-200 bg-white/70 p-3">
+												<div className="rounded border border-slate-200 bg-slate-100/80 p-3">
 													<p className="text-xs uppercase text-slate-500">Shift bonuses</p>
 													<ul className="mt-2 space-y-1 text-sm text-slate-700">
-														{bonusEntriesByType.shift.length === 0 && <li>No bonuses</li>}
-														{bonusEntriesByType.shift.map((entry) => (
-															<li key={entry.id}>
+														{currentCutShiftBonuses.length === 0 && <li>No bonuses</li>}
+														{currentCutShiftBonuses.map((entry) => (
+															<li key={`${entry.date}-${entry.amount}`}>
 																{entry.date} • ${Number(entry.amount || 0).toFixed(2)}
 															</li>
 														))}
 													</ul>
 												</div>
-												<div className="rounded border border-slate-200 bg-white/70 p-3">
+												<div className="rounded border border-slate-200 bg-slate-100/80 p-3">
 													<p className="text-xs uppercase text-slate-500">Double shift</p>
 													<ul className="mt-2 space-y-1 text-sm text-slate-700">
 														{bonusEntriesByType.double_shift.length === 0 && <li>No bonuses</li>}
@@ -3404,7 +3418,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 														))}
 													</ul>
 												</div>
-												<div className="rounded border border-slate-200 bg-white/70 p-3">
+												<div className="rounded border border-slate-200 bg-slate-100/80 p-3">
 													<p className="text-xs uppercase text-slate-500">Holiday bonuses</p>
 													<ul className="mt-2 space-y-1 text-sm text-slate-700">
 														{bonusEntriesByType.holiday.length === 0 && <li>No bonuses</li>}
