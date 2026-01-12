@@ -3249,7 +3249,35 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		return grouped;
 	}, [currentCutBonusEntries]);
 
-	const currentCutTotal = (currentPeriod?.total ?? 0) + bonusEntriesTotal;
+	const getMonthSales = (monthStart: Date) => {
+		const monthEnd = endOfMonth(monthStart);
+		return dailyEarned.reduce((sum, entry) => {
+			if (entry.date >= monthStart && entry.date <= monthEnd) {
+				return sum + Number(entry.sales || 0);
+			}
+			return sum;
+		}, 0);
+	};
+
+	const isFirstCutOfMonth = (period: { start: Date }) => {
+		const monthStart = startOfMonth(period.start);
+		const firstInMonth = payPeriods
+			.filter((p) => p.start >= monthStart && p.start <= endOfMonth(monthStart))
+			.sort((a, b) => a.start.getTime() - b.start.getTime())[0];
+		return Boolean(firstInMonth && firstInMonth.key === currentPeriod?.key);
+	};
+
+	const performanceBonusCurrentCut = useMemo(() => {
+		if (!currentPeriod || !isFirstCutOfMonth(currentPeriod)) return 0;
+		const prevMonth = startOfMonth(subMonths(currentPeriod.start, 1));
+		const prevMonthSales = getMonthSales(prevMonth);
+		if (prevMonthSales <= 10000) return 0;
+		const units = Math.floor((prevMonthSales - 1) / 10000);
+		return units * 250;
+	}, [currentPeriod, payPeriods, dailyEarned]);
+
+	const totalCutBonuses = shiftBonusesTotal + bonusEntriesTotal + performanceBonusCurrentCut;
+	const currentCutTotal = (currentPeriod?.total ?? 0) + bonusEntriesTotal + performanceBonusCurrentCut;
 	const currentCutBonus = currentPeriod?.bonusTotal ?? 0;
 	const previousPeriod = useMemo(() => {
 		if (!currentPeriod) return null;
@@ -3461,6 +3489,16 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 												</span>
 											</div>
 											<Progress value={100} className="h-2 bg-slate-200" />
+											<div className="flex items-center justify-between">
+												<span className="text-slate-400">Progress to $10k bonus</span>
+												<span className="text-slate-100 font-semibold tabular-nums">
+													{formatCurrency(getMonthSales(startOfMonth(calendarMonth || new Date())))}
+												</span>
+											</div>
+											<Progress
+												value={Math.min(100, Math.max(0, (getMonthSales(startOfMonth(calendarMonth || new Date())) / 10000) * 100))}
+												className="h-2 bg-slate-200"
+											/>
 										</div>
 									)}
 									{currentPeriod && (
@@ -3468,10 +3506,10 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 											<div className="flex items-center justify-between">
 												<span className="text-slate-400">Bonuses (current cut)</span>
 												<span className="text-slate-100 font-semibold tabular-nums">
-													{formatCurrency(bonusEntriesTotal + shiftBonusesTotal)}
+													{formatCurrency(totalCutBonuses)}
 												</span>
 											</div>
-											<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+											<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
 												<div className="rounded border border-slate-700/60 bg-slate-800/70 p-3 chatter-panel">
 													<p className="text-xs uppercase text-slate-300">Shift bonuses</p>
 													<ul className="mt-2 space-y-1 text-sm text-slate-200">
@@ -3503,6 +3541,16 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 																{entry.date} • ${Number(entry.amount || 0).toFixed(2)}
 															</li>
 														))}
+													</ul>
+												</div>
+												<div className="rounded border border-slate-700/60 bg-slate-800/70 p-3 chatter-panel">
+													<p className="text-xs uppercase text-slate-300">Performance bonus</p>
+													<ul className="mt-2 space-y-1 text-sm text-slate-200">
+														{performanceBonusCurrentCut > 0 ? (
+															<li>{formatCurrency(performanceBonusCurrentCut)}</li>
+														) : (
+															<li>No bonus</li>
+														)}
 													</ul>
 												</div>
 											</div>
