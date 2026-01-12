@@ -3011,11 +3011,11 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	};
 
 	return (
-		<Card className="bg-slate-900/60 border-slate-800 backdrop-blur">
+		<Card className="chatter-dashboard backdrop-blur">
 			<CardHeader className="space-y-1">
 				<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 					<div className="min-w-0">
-						<CardTitle className="text-slate-100 text-xl">Chatter Dashboard</CardTitle>
+						<CardTitle className="text-slate-100 text-xl quiz-title">Chatter Dashboard</CardTitle>
 						<CardDescription className="text-slate-400">
 							Your earnings overview from the latest payroll upload
 						</CardDescription>
@@ -3076,27 +3076,27 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 							</Card>
 						)}
 						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-							<Card className="bg-gradient-to-br from-emerald-500/10 to-slate-900 border-slate-800">
+							<Card className="stat-card">
 								<CardHeader className="pb-2">
 									<CardTitle className="text-xs uppercase tracking-wide text-slate-300">Total Sales</CardTitle>
 								</CardHeader>
 								<CardContent>
-									<div className="text-3xl font-semibold text-emerald-300 tabular-nums">
+									<div className="text-3xl font-semibold text-emerald-300 tabular-nums stat-value">
 										{formatCurrency(sales)}
 									</div>
 								</CardContent>
 							</Card>
-							<Card className="bg-gradient-to-br from-sky-500/10 to-slate-900 border-slate-800">
+							<Card className="stat-card">
 								<CardHeader className="pb-2">
 									<CardTitle className="text-xs uppercase tracking-wide text-slate-300">Current Bonuses</CardTitle>
 								</CardHeader>
 								<CardContent>
-									<div className="text-3xl font-semibold text-sky-300 tabular-nums">
+									<div className="text-3xl font-semibold text-sky-300 tabular-nums stat-value">
 										{formatCurrency(currentCutBonus)}
 									</div>
 								</CardContent>
 							</Card>
-							<Card className="bg-gradient-to-br from-amber-500/10 to-slate-900 border-slate-800">
+							<Card className="stat-card">
 								<CardHeader className="pb-2">
 									<CardTitle className="text-xs uppercase tracking-wide text-slate-300">Current Cut</CardTitle>
 									<CardDescription className="text-slate-400">
@@ -3104,7 +3104,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 									</CardDescription>
 								</CardHeader>
 								<CardContent>
-									<div className="text-3xl font-semibold text-amber-300 tabular-nums">
+									<div className="text-3xl font-semibold text-amber-300 tabular-nums stat-value">
 										{formatCurrency(currentCutTotal)}
 									</div>
 								</CardContent>
@@ -4143,12 +4143,12 @@ function QuizInterface({
 		(completedQuestions.size === sortedQuestions.length - 1 && answers[currentQuestionIndex]?.trim());
 
 	return (
-		<div className="max-w-3xl mx-auto space-y-6">
-			<Card className="bg-slate-900 border-slate-800">
+		<div className="max-w-3xl mx-auto space-y-6 quiz-shell">
+			<Card className="quiz-card">
 				<CardHeader>
 					<div className="flex justify-between items-center">
 						<div>
-							<CardTitle className="text-slate-100">Quiz Assessment</CardTitle>
+							<CardTitle className="text-slate-100 quiz-title">Quiz Assessment</CardTitle>
 							<CardDescription className="text-slate-400">
 								Question {currentQuestionIndex + 1} of {sortedQuestions.length}
 								<span className="ml-2 text-green-400">({completedQuestions.size} answered)</span>
@@ -4163,7 +4163,7 @@ function QuizInterface({
 				<CardContent className="space-y-6">
 					{currentQuestion && (
 						<div className="space-y-4">
-							<div className="p-4 bg-slate-50 rounded-lg">
+							<div className="p-4 rounded-lg quiz-question">
 								<Label className="text-base font-semibold">{currentQuestion.text}</Label>
 							</div>
 
@@ -4213,6 +4213,7 @@ function QuizInterface({
 							<Button
 								onClick={handleNextQuestion}
 								disabled={!canProceed || evaluating}
+								className="quiz-action"
 							>
 								{completedQuestions.has(currentQuestionIndex) ? "Next Question" : "Save & Next"}
 							</Button>
@@ -4220,7 +4221,7 @@ function QuizInterface({
 							<Button
 								onClick={submitQuiz}
 								disabled={!allQuestionsCompleted || evaluating}
-								className="bg-green-600 hover:bg-green-700"
+								className="bg-green-600 hover:bg-green-700 quiz-action"
 							>
 								{evaluating ? "Evaluating..." : "Submit All Answers"}
 							</Button>
@@ -4246,14 +4247,14 @@ function CompletionScreen({
 	const belowAverage = completion.score < passThreshold;
 	return (
 		<div className="max-w-2xl mx-auto">
-			<Card className="border-green-800 bg-green-950/30">
+			<Card className="quiz-card border-green-800">
 				<CardHeader className="text-center">
 					<div className="flex justify-center mb-4">
 						<div className="w-20 h-20 bg-green-600 rounded-full flex items-center justify-center">
 							<Trophy className="w-12 h-12 text-white" />
 						</div>
 					</div>
-					<CardTitle className="text-3xl text-green-400">Congratulations!</CardTitle>
+					<CardTitle className="text-3xl text-green-400 quiz-title">Congratulations!</CardTitle>
 					<CardDescription className="text-green-300 text-lg">
 						You have successfully completed the training
 					</CardDescription>
@@ -4536,8 +4537,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 	};
 
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-slate-950 to-slate-900 flex items-center justify-center px-4">
-			<Card className="w-full max-w-md bg-slate-900 border-slate-800">
+		<div className="min-h-screen login-shell flex items-center justify-center px-4">
+			<Card className="w-full max-w-md login-card">
 				<CardHeader className="text-center">
 					<div className="flex justify-center mb-4">
 						<div className={cn(
@@ -4547,10 +4548,10 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 							<UserCircle className="w-10 h-10 text-white" />
 						</div>
 					</div>
-					<CardTitle className="text-2xl text-slate-100">
+					<CardTitle className="text-2xl text-slate-100 login-title">
 						{showAdminLogin ? "Admin Login" : "Welcome to Training Platform"}
 					</CardTitle>
-					<CardDescription className="text-slate-400">
+					<CardDescription className="text-slate-400 login-subtitle">
 						{showAdminLogin ? "Enter admin credentials" : "Enter your details to access training videos"}
 					</CardDescription>
 				</CardHeader>
@@ -4565,6 +4566,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 									onChange={(e) => setName(e.target.value)}
 									placeholder="John Doe"
 									disabled={isLoading}
+									className="login-input"
 									onKeyDown={(e) => e.key === "Enter" && handleLogin()}
 								/>
 							</div>
@@ -4577,6 +4579,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 									onChange={(e) => setDiscordUsername(e.target.value)}
 									placeholder="discord_user"
 									disabled={isLoading}
+									className="login-input"
 									onKeyDown={(e) => e.key === "Enter" && handleLogin()}
 								/>
 							</div>
@@ -4589,6 +4592,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 									onChange={(e) => setDiscordNickname(e.target.value)}
 									placeholder="Your Discord nickname"
 									disabled={isLoading}
+									className="login-input"
 									onKeyDown={(e) => e.key === "Enter" && handleLogin()}
 								/>
 							</div>
@@ -4602,6 +4606,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 									onChange={(e) => setEmail(e.target.value)}
 									placeholder="john@example.com"
 									disabled={isLoading}
+									className="login-input"
 									onKeyDown={(e) => e.key === "Enter" && handleLogin()}
 								/>
 							</div>
@@ -4615,6 +4620,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 									onChange={(e) => setPassword(e.target.value)}
 									placeholder="Create a password"
 									disabled={isLoading}
+									className="login-input"
 									onKeyDown={(e) => e.key === "Enter" && handleLogin()}
 								/>
 							</div>
@@ -4626,7 +4632,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 								</Alert>
 							)}
 
-							<Button onClick={handleLogin} disabled={isLoading} className="w-full" size="lg">
+							<Button onClick={handleLogin} disabled={isLoading} className="w-full login-primary" size="lg">
 								{isLoading ? "Loading..." : "Continue"}
 							</Button>
 
@@ -4639,7 +4645,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 									setAdminPassword("");
 								}}
 								variant="outline"
-								className="w-full"
+								className="w-full login-ghost"
 							>
 								<Settings className="w-4 h-4 mr-2" />
 								Admin Login
@@ -4660,6 +4666,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 									onChange={(e) => setAdminPassword(e.target.value)}
 									placeholder="Enter admin password"
 									disabled={isLoading}
+									className="login-input"
 									onKeyDown={(e) => e.key === "Enter" && handleAdminLogin()}
 								/>
 							</div>
@@ -4671,7 +4678,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 								</Alert>
 							)}
 
-							<Button onClick={handleAdminLogin} disabled={isLoading} className="w-full" size="lg">
+							<Button onClick={handleAdminLogin} disabled={isLoading} className="w-full login-primary" size="lg">
 								{isLoading ? "Loading..." : "Login as Admin"}
 							</Button>
 

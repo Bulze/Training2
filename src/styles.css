@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 @plugin "tailwindcss-animate";
@@ -7,10 +8,10 @@
 body {
 	@apply m-0;
 	font-family:
-		"Segoe UI", "Helvetica Neue", Arial, sans-serif;
+		"Sora", "Helvetica Neue", Arial, sans-serif;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
-	background: radial-gradient(circle at top, #111b34 0%, #0a0f1f 55%);
+	background: radial-gradient(circle at top, #182444 0%, #0b1224 55%);
 	color-scheme: dark;
 }
 
@@ -20,29 +21,29 @@ code {
 }
 
 :root {
-	--background: #0a0f1f;
-	--foreground: #e5e7eb;
-	--card: #0f172a;
+	--background: #0b1224;
+	--foreground: #eef2f7;
+	--card: #121a31;
 	--card-foreground: #e5e7eb;
-	--popover: #101a2f;
+	--popover: #111b33;
 	--popover-foreground: #e5e7eb;
-	--primary: #2dd4bf;
+	--primary: #38bdf8;
 	--primary-foreground: #02121a;
-	--secondary: #0f172a;
+	--secondary: #141f3d;
 	--secondary-foreground: #e5e7eb;
-	--muted: #1f2a44;
+	--muted: #1a2542;
 	--muted-foreground: #94a3b8;
-	--accent: #22d3ee;
+	--accent: #fbbf24;
 	--accent-foreground: #02121a;
 	--destructive: #fb7185;
 	--destructive-foreground: #1a0610;
-	--border: #1f2a44;
-	--input: #101a2f;
-	--ring: #2dd4bf;
-	--chart-1: #22d3ee;
-	--chart-2: #2dd4bf;
+	--border: #223052;
+	--input: #0f1933;
+	--ring: #38bdf8;
+	--chart-1: #38bdf8;
+	--chart-2: #22c55e;
 	--chart-3: #fb7185;
-	--chart-4: #f472b6;
+	--chart-4: #f59e0b;
 	--chart-5: #94a3b8;
 	--radius: 0.625rem;
 	--sidebar: #0f172a;
@@ -56,29 +57,29 @@ code {
 }
 
 .dark {
-	--background: #0a0f1f;
-	--foreground: #e5e7eb;
-	--card: #0f172a;
+	--background: #0b1224;
+	--foreground: #eef2f7;
+	--card: #121a31;
 	--card-foreground: #e5e7eb;
-	--popover: #101a2f;
+	--popover: #111b33;
 	--popover-foreground: #e5e7eb;
-	--primary: #2dd4bf;
+	--primary: #38bdf8;
 	--primary-foreground: #02121a;
-	--secondary: #0f172a;
+	--secondary: #141f3d;
 	--secondary-foreground: #e5e7eb;
-	--muted: #1f2a44;
+	--muted: #1a2542;
 	--muted-foreground: #94a3b8;
-	--accent: #22d3ee;
+	--accent: #fbbf24;
 	--accent-foreground: #02121a;
 	--destructive: #fb7185;
 	--destructive-foreground: #1a0610;
-	--border: #1f2a44;
-	--input: #101a2f;
-	--ring: #2dd4bf;
-	--chart-1: #22d3ee;
-	--chart-2: #2dd4bf;
+	--border: #223052;
+	--input: #0f1933;
+	--ring: #38bdf8;
+	--chart-1: #38bdf8;
+	--chart-2: #22c55e;
 	--chart-3: #fb7185;
-	--chart-4: #f472b6;
+	--chart-4: #f59e0b;
 	--chart-5: #94a3b8;
 	--sidebar: #0f172a;
 	--sidebar-foreground: #e5e7eb;
@@ -136,6 +137,103 @@ code {
 	body {
 		@apply bg-background text-foreground;
 	}
+}
+
+.login-shell {
+	position: relative;
+	background: radial-gradient(circle at 20% 10%, rgba(56, 189, 248, 0.18), transparent 55%),
+		radial-gradient(circle at 80% 0%, rgba(251, 191, 36, 0.14), transparent 52%),
+		linear-gradient(180deg, #111a32 0%, #0b1224 100%);
+	overflow: hidden;
+}
+
+.login-shell::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background-image:
+		linear-gradient(120deg, rgba(255, 255, 255, 0.04), transparent 40%),
+		radial-gradient(circle at 70% 20%, rgba(255, 255, 255, 0.04), transparent 45%);
+	pointer-events: none;
+}
+
+.login-card {
+	background: linear-gradient(145deg, rgba(20, 31, 61, 0.9), rgba(10, 16, 36, 0.92));
+	border: 1px solid rgba(90, 106, 140, 0.35);
+	box-shadow: 0 30px 80px rgba(6, 11, 28, 0.65);
+	backdrop-filter: blur(12px);
+}
+
+.login-title {
+	font-family: "Space Grotesk", "Sora", sans-serif;
+	letter-spacing: -0.02em;
+}
+
+.login-subtitle {
+	color: rgba(226, 232, 240, 0.7);
+}
+
+.login-input {
+	background: #0f1933;
+	border: 1px solid rgba(76, 94, 132, 0.5);
+}
+
+.login-input:focus {
+	border-color: rgba(56, 189, 248, 0.8);
+	box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
+}
+
+.login-primary {
+	background: linear-gradient(135deg, rgba(56, 189, 248, 0.95), rgba(34, 197, 94, 0.9));
+	border: none;
+	box-shadow: 0 16px 30px rgba(3, 105, 161, 0.35);
+}
+
+.login-ghost {
+	border-color: rgba(94, 113, 156, 0.45);
+}
+
+.chatter-dashboard {
+	background: linear-gradient(135deg, rgba(18, 26, 49, 0.92), rgba(10, 16, 36, 0.96));
+	border: 1px solid rgba(84, 102, 140, 0.4);
+	box-shadow: 0 24px 60px rgba(4, 10, 28, 0.6);
+}
+
+.stat-card {
+	border: 1px solid rgba(88, 106, 146, 0.35);
+	background: linear-gradient(160deg, rgba(20, 31, 61, 0.9), rgba(12, 18, 40, 0.95));
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.stat-value {
+	font-family: "Space Grotesk", "Sora", sans-serif;
+}
+
+.quiz-shell {
+	background: radial-gradient(circle at 25% 10%, rgba(56, 189, 248, 0.16), transparent 60%),
+		linear-gradient(180deg, rgba(12, 18, 36, 0.98), rgba(10, 15, 30, 0.98));
+	border-radius: 20px;
+	padding: 12px;
+}
+
+.quiz-card {
+	background: linear-gradient(145deg, rgba(18, 26, 49, 0.96), rgba(9, 14, 30, 0.98));
+	border: 1px solid rgba(86, 104, 140, 0.4);
+	box-shadow: 0 22px 48px rgba(6, 12, 30, 0.6);
+}
+
+.quiz-title {
+	font-family: "Space Grotesk", "Sora", sans-serif;
+}
+
+.quiz-question {
+	background: rgba(255, 255, 255, 0.95);
+	color: #0f172a;
+	border: 1px solid rgba(15, 23, 42, 0.15);
+}
+
+.quiz-action {
+	box-shadow: 0 12px 24px rgba(6, 11, 28, 0.4);
 }
 
 .payroll-app,
