@@ -3170,11 +3170,23 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 					bonusTotal += bonusByDay.get(dateKey) ?? 0;
 				}
 			}
+			// Performance bonus hits the cut that includes the 1st of the next month.
+			const monthStart = startOfMonth(endExclusive);
+			if (monthStart > start && monthStart < endExclusive) {
+				const prevMonth = startOfMonth(subMonths(monthStart, 1));
+				const prevMonthSales = getMonthSales(prevMonth);
+				if (prevMonthSales > 10000) {
+					const units = Math.floor((prevMonthSales - 1) / 10000);
+					const perfBonus = units * 250;
+					total += perfBonus;
+					bonusTotal += perfBonus;
+				}
+			}
 			periods.push({ start, endExclusive, cutoff, total, bonusTotal, key });
 			start = endExclusive;
 		}
 		return periods.filter((p) => p.total > 0 || p.bonusTotal > 0);
-	}, [dailyEarned, earnedByDay, bonusByDay]);
+	}, [dailyEarned, earnedByDay, bonusByDay, getMonthSales]);
 
 	const payPeriodByCutoff = useMemo(() => {
 		const map = new Map<string, { total: number; start: Date; endExclusive: Date }>();
