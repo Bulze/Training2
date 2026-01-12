@@ -64,6 +64,14 @@ const CHATTER_ADMIN_STORE = {
 	version: "1",
 	task: "chatter_admin",
 };
+const PAYROLL_PERCENT_STORE = {
+	id: "payroll_percent_v1",
+	namespace: "training_app",
+	name: "payroll_percent",
+	version: "1",
+	task: "payroll",
+};
+const PAYROLL_PERCENT_KEY = "current";
 
 type PayrollEmployee = {
 	employee: string;
@@ -214,6 +222,49 @@ const clearPayrollSnapshot = async () => {
 		index: buildPayrollIndex(PAYROLL_KEY),
 		format: { structured: true },
 	});
+};
+
+const buildPayrollPercentIndex = (key: string) => ({
+	fields: ["key"],
+	values: [CreateValue(DataType.string, key, "key")],
+});
+
+const fetchPayrollPercentOverrides = async () => {
+	const response = await payrollClient.get({
+		...PAYROLL_PERCENT_STORE,
+		index: buildPayrollPercentIndex(PAYROLL_PERCENT_KEY),
+		format: { structured: true },
+	});
+	const structured = response.data?.values?.[0]?.structured || [];
+	if (structured.length === 0) {
+		return { overrides: {} as Record<string, number>, updatedAt: null as string | null };
+	}
+	const record = valuesToObject(structured) as {
+		overrides?: Record<string, number>;
+		updated_at?: string;
+	};
+	return {
+		overrides: record.overrides ?? {},
+		updatedAt: record.updated_at ?? null,
+	};
+};
+
+const savePayrollPercentOverrides = async (overrides: Record<string, number>) => {
+	const updatedAt = new Date().toISOString();
+	const data = CreateData([
+		CreateValue(DataType.string, PAYROLL_PERCENT_KEY, "key"),
+		CreateValue(DataType.object, overrides, "overrides"),
+		CreateValue(DataType.string, updatedAt, "updated_at"),
+	]);
+
+	await payrollClient.set({
+		...PAYROLL_PERCENT_STORE,
+		index: buildPayrollPercentIndex(PAYROLL_PERCENT_KEY),
+		data,
+		format: { structured: true },
+	});
+
+	return updatedAt;
 };
 
 const buildChatterAdminIndex = (userId: string) => ({
@@ -1319,6 +1370,7 @@ function PayrollPanel() {
 	const [isAnalyzing, setIsAnalyzing] = useState(false);
 	const [employeeFeedback, setEmployeeFeedback] = useState<Record<string, PayrollEmployeeFeedback>>({});
 	const [employeeFeedbackLoading, setEmployeeFeedbackLoading] = useState(false);
+	const [percentOverrides, setPercentOverrides] = useState<Record<string, number>>({});
 
 	const formatApiErrorMessage = (label: string, error: unknown) => {
 		const message =
@@ -1368,9 +1420,11 @@ function PayrollPanel() {
 		let cancelled = false;
 		const load = async () => {
 			try {
-				setStatus("Loading stored payroll…");
+				setStatus("Loading stored payroll...");
 				const stored = await fetchPayrollSnapshot();
+				const storedOverrides = await fetchPayrollPercentOverrides();
 				if (cancelled) return;
+				setPercentOverrides(storedOverrides.overrides);
 				if (stored.snapshot) {
 					applySnapshot(stored.snapshot, stored.updatedAt);
 					setStatus("Loaded stored payroll.");
@@ -1583,6 +1637,12 @@ function PayrollPanel() {
 					percentByEmployee.set(key, existingPercent);
 				}
 			}
+			for (const [key, value] of Object.entries(percentOverrides)) {
+				const percentOverride = Number(value);
+				if (Number.isFinite(percentOverride)) {
+					percentByEmployee.set(key, percentOverride);
+				}
+			}
 			const preparedEmployees = (data.employees || []).map((emp) => {
 				const key = (emp.employee || "").toLowerCase().trim();
 				const overridePercent = key ? percentByEmployee.get(key) : undefined;
@@ -1644,6 +1704,14 @@ function PayrollPanel() {
 	const handleApply = () => {
 		if (!selectedEmployeeName) return;
 		const percentValue = parseFloat(detailPercent);
+		if (!Number.isNaN(percentValue)) {
+			const key = selectedEmployeeName.toLowerCase().trim();
+			if (key) {
+				const nextOverrides = { ...percentOverrides, [key]: percentValue / 100 };
+				setPercentOverrides(nextOverrides);
+				savePayrollPercentOverrides(nextOverrides).catch(() => {});
+			}
+		}
 		const nextEmployees = employees.map((emp) => {
 			if (emp.employee !== selectedEmployeeName) return emp;
 			return {
@@ -4974,6 +5042,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 		</div>
 	);
 }
+
+
 
 
 
