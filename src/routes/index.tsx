@@ -2861,13 +2861,6 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				const prev = byDate.get(dateKey) ?? { sales: 0, bonus: 0 };
 				byDate.set(dateKey, { sales: prev.sales + shiftSales, bonus: prev.bonus + shiftBonus });
 			}
-			const bonusByDay = employee?.daily_bonus || {};
-			for (const [dateKey, dayBonus] of Object.entries(bonusByDay)) {
-				const key = String(dateKey || "").slice(0, 10);
-				if (!key) continue;
-				const prev = byDate.get(key) ?? { sales: 0, bonus: 0 };
-				byDate.set(key, { sales: prev.sales, bonus: prev.bonus + Number(dayBonus ?? 0) });
-			}
 		} else {
 			const daily = employee?.daily_sales || {};
 			for (const [dateKeyRaw, value] of Object.entries(daily)) {
@@ -2877,13 +2870,6 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				const dayBonus = computeShiftBonus(daySales);
 				const prev = byDate.get(dateKey) ?? { sales: 0, bonus: 0 };
 				byDate.set(dateKey, { sales: prev.sales + daySales, bonus: prev.bonus + dayBonus });
-			}
-			const bonusByDay = employee?.daily_bonus || {};
-			for (const [dateKeyRaw, dayBonus] of Object.entries(bonusByDay)) {
-				const dateKey = String(dateKeyRaw || "").slice(0, 10);
-				if (!dateKey) continue;
-				const prev = byDate.get(dateKey) ?? { sales: 0, bonus: 0 };
-				byDate.set(dateKey, { sales: prev.sales, bonus: prev.bonus + Number(dayBonus ?? 0) });
 			}
 		}
 
@@ -2936,6 +2922,14 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		const map = new Map<string, number>();
 		for (const item of dailyEarned) {
 			map.set(item.dateKey, item.bonus);
+		}
+		return map;
+	}, [dailyEarned]);
+
+	const salesByDay = useMemo(() => {
+		const map = new Map<string, number>();
+		for (const item of dailyEarned) {
+			map.set(item.dateKey, item.sales);
 		}
 		return map;
 	}, [dailyEarned]);
@@ -3245,7 +3239,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 											))}
 											{calendarDays.map((day) => {
 												const key = format(day, "yyyy-MM-dd");
-												const amount = earnedByDay.get(key) ?? 0;
+												const salesAmount = salesByDay.get(key) ?? 0;
 												const dayBonus = bonusByDay.get(key) ?? 0;
 												const cutoff = payPeriodByCutoff.get(key);
 												const muted = !isSameMonth(day, calendarMonth);
@@ -3262,7 +3256,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 														<div className="flex justify-between text-slate-300">
 															<span>{format(day, "d")}</span>
 															<span className="text-amber-300">
-																{cutoff ? "CUT" : amount ? formatCurrency(amount, 0) : ""}
+																{cutoff ? "CUT" : salesAmount ? formatCurrency(salesAmount, 0) : ""}
 															</span>
 														</div>
 														{cutoff && (
@@ -3270,9 +3264,9 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 																{formatCurrency(cutoff.total, 2)}
 															</div>
 														)}
-														{amount > 0 && (
+														{salesAmount > 0 && (
 															<div className="mt-1 text-slate-400">
-																{formatCurrency(amount, 2)}
+																Sales {formatCurrency(salesAmount, 2)}
 															</div>
 														)}
 														{dayBonus > 0 && (
