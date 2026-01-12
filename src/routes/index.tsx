@@ -3605,7 +3605,9 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 															</span>
 														</div>
 														{dayBonus > 0 && (
-															<span className="calendar-badge">Bonus</span>
+															<span className="calendar-badge">
+																{formatCurrency(dayBonus, 0)}
+															</span>
 														)}
 													</div>
 												);

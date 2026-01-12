@@ -791,15 +791,15 @@ code {
 }
 
 .chatter-neo .calendar-cell-low {
-	background: #3a4b3a;
+	background: linear-gradient(180deg, rgba(248, 113, 113, 0.18), rgba(48, 59, 76, 0.96));
 }
 
 .chatter-neo .calendar-cell-mid {
-	background: #6e5a18;
+	background: linear-gradient(180deg, rgba(240, 180, 41, 0.2), rgba(48, 59, 76, 0.96));
 }
 
 .chatter-neo .calendar-cell-strong {
-	background: #2f8a0a;
+	background: linear-gradient(180deg, rgba(34, 197, 94, 0.22), rgba(48, 59, 76, 0.96));
 }
 
 .chatter-neo button {
@@ -831,7 +831,7 @@ code {
 .chatter-neo .calendar-amount {
 	font-size: 13px;
 	font-weight: 600;
-	color: #e6edf6;
+	color: #ffffff;
 }
 
 .chatter-neo .calendar-base {
@@ -852,7 +852,7 @@ code {
 	background: rgba(15, 23, 42, 0.55);
 	border: 1px solid rgba(255, 255, 255, 0.1);
 	font-size: 10px;
-	color: #e6edf6;
+	color: #ffffff;
 	text-transform: uppercase;
 	letter-spacing: 0.06em;
 }
