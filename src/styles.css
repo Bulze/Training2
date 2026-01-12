@@ -783,8 +783,8 @@ code {
 }
 
 .chatter-neo .calendar-cell {
-	border-color: #3a465c;
-	background: #2b3445;
+	border-color: #384458;
+	background: #303b4c;
 	display: flex;
 	flex-direction: column;
 	justify-content: space-between;
@@ -835,8 +835,8 @@ code {
 }
 
 .chatter-neo .calendar-base {
-	background: #343e50;
-	border-color: #3e4a60;
+	background: #2f394a;
+	border-color: #3c475b;
 }
 
 .chatter-neo .calendar-cutoff {
