@@ -3259,22 +3259,18 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		}, 0);
 	};
 
-	const isFirstCutOfMonth = (period: { start: Date }) => {
-		const monthStart = startOfMonth(period.start);
-		const firstInMonth = payPeriods
-			.filter((p) => p.start >= monthStart && p.start <= endOfMonth(monthStart))
-			.sort((a, b) => a.start.getTime() - b.start.getTime())[0];
-		return Boolean(firstInMonth && firstInMonth.key === currentPeriod?.key);
-	};
-
 	const performanceBonusCurrentCut = useMemo(() => {
-		if (!currentPeriod || !isFirstCutOfMonth(currentPeriod)) return 0;
-		const prevMonth = startOfMonth(subMonths(currentPeriod.start, 1));
+		if (!currentPeriod) return 0;
+		const monthStartCandidate = startOfMonth(currentPeriod.endExclusive);
+		if (monthStartCandidate <= currentPeriod.start || monthStartCandidate >= currentPeriod.endExclusive) {
+			return 0;
+		}
+		const prevMonth = startOfMonth(subMonths(monthStartCandidate, 1));
 		const prevMonthSales = getMonthSales(prevMonth);
 		if (prevMonthSales <= 10000) return 0;
 		const units = Math.floor((prevMonthSales - 1) / 10000);
 		return units * 250;
-	}, [currentPeriod, payPeriods, dailyEarned]);
+	}, [currentPeriod, dailyEarned]);
 
 	const totalCutBonuses = shiftBonusesTotal + bonusEntriesTotal + performanceBonusCurrentCut;
 	const currentCutTotal = (currentPeriod?.total ?? 0) + bonusEntriesTotal + performanceBonusCurrentCut;
@@ -3472,6 +3468,25 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 									)}
 									{monthEstimate && (
 										<div className="mt-4 space-y-3 text-sm">
+											{(() => {
+												const monthStart = startOfMonth(calendarMonth || new Date());
+												const monthSales = getMonthSales(monthStart);
+												const nextThreshold = (Math.floor(monthSales / 10000) + 1) * 10000;
+												const progressPct = Math.min(100, Math.max(0, (monthSales / nextThreshold) * 100));
+												return (
+													<>
+														<div className="flex items-center justify-between">
+															<span className="text-slate-400">
+																Progress to {formatCurrency(nextThreshold, 0)} bonus
+															</span>
+															<span className="text-slate-100 font-semibold tabular-nums">
+																{formatCurrency(monthSales, 0)}
+															</span>
+														</div>
+														<Progress value={progressPct} className="h-2 bg-slate-200" />
+													</>
+												);
+											})()}
 											<div className="flex items-center justify-between">
 												<span className="text-slate-400">Estimated month earnings</span>
 												<span className="text-slate-100 font-semibold tabular-nums">
@@ -3489,16 +3504,6 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 												</span>
 											</div>
 											<Progress value={100} className="h-2 bg-slate-200" />
-											<div className="flex items-center justify-between">
-												<span className="text-slate-400">Progress to $10k bonus</span>
-												<span className="text-slate-100 font-semibold tabular-nums">
-													{formatCurrency(getMonthSales(startOfMonth(calendarMonth || new Date())))}
-												</span>
-											</div>
-											<Progress
-												value={Math.min(100, Math.max(0, (getMonthSales(startOfMonth(calendarMonth || new Date())) / 10000) * 100))}
-												className="h-2 bg-slate-200"
-											/>
 										</div>
 									)}
 									{currentPeriod && (
