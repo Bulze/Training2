@@ -3472,7 +3472,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 												</span>
 											</div>
 											<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-												<div className="rounded border border-slate-700/60 bg-slate-800/70 p-3">
+												<div className="rounded border border-slate-700/60 bg-slate-800/70 p-3 chatter-panel">
 													<p className="text-xs uppercase text-slate-300">Shift bonuses</p>
 													<ul className="mt-2 space-y-1 text-sm text-slate-200">
 														{currentCutShiftBonuses.length === 0 && <li>No bonuses</li>}
@@ -3483,7 +3483,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 														))}
 													</ul>
 												</div>
-												<div className="rounded border border-slate-700/60 bg-slate-800/70 p-3">
+												<div className="rounded border border-slate-700/60 bg-slate-800/70 p-3 chatter-panel">
 													<p className="text-xs uppercase text-slate-300">Double shift</p>
 													<ul className="mt-2 space-y-1 text-sm text-slate-200">
 														{bonusEntriesByType.double_shift.length === 0 && <li>No bonuses</li>}
@@ -3494,7 +3494,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 														))}
 													</ul>
 												</div>
-												<div className="rounded border border-slate-700/60 bg-slate-800/70 p-3">
+												<div className="rounded border border-slate-700/60 bg-slate-800/70 p-3 chatter-panel">
 													<p className="text-xs uppercase text-slate-300">Holiday bonuses</p>
 													<ul className="mt-2 space-y-1 text-sm text-slate-200">
 														{bonusEntriesByType.holiday.length === 0 && <li>No bonuses</li>}
