@@ -2940,8 +2940,8 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		const first = dailyEarned[0].date;
 		const last = dailyEarned[dailyEarned.length - 1].date;
 
-		// Cut runs Friday->Thursday (weekly). Friday starts the period, next Friday is excluded.
-		const PERIOD_DAYS = 7;
+		// Cut runs Friday->Thursday (14 days). Friday starts, next Friday belongs to the next cut.
+		const PERIOD_DAYS = 14;
 		let start = first;
 		while (getDay(start) !== 5) start = subDays(start, 1);
 
