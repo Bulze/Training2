@@ -961,6 +961,24 @@ code {
 	background: #374459;
 }
 
+.app-shell .payroll-app .btn.pink,
+.app-shell .payroll-app .btn.accent {
+	box-shadow: none !important;
+	background-image: none !important;
+}
+
+.app-shell .payroll-app .btn.accent,
+.app-shell .payroll-app .btn.pink {
+	background: #2f3a4b;
+	border-color: #3c475b;
+	color: #e7ebf0;
+}
+
+.app-shell .payroll-app .btn.accent:hover,
+.app-shell .payroll-app .btn.pink:hover {
+	background: #3a475b;
+}
+
 .app-shell .payroll-app .switch input:checked + .slider {
 	background: #3c475b;
 }
