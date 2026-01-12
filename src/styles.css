@@ -803,9 +803,80 @@ code {
 	background-color: #2b3748;
 	border-color: #3a4556;
 	color: #e7ebf0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	overflow: hidden;
 }
 
 .app-shell button:hover,
 .app-shell .btn:hover {
 	background-color: #354256;
+}
+
+.app-shell button,
+.app-shell .btn,
+.app-shell .tab-btn,
+.app-shell .tabs-list button,
+.app-shell .tabs-trigger {
+	line-height: 1.2;
+}
+
+.app-shell input,
+.app-shell textarea,
+.app-shell select {
+	line-height: 1.3;
+}
+
+.app-shell .badge,
+.app-shell .card-title,
+.app-shell .card-description {
+	text-align: center;
+}
+
+.app-shell .card-title,
+.app-shell .card-description {
+	text-align: left;
+}
+
+.app-shell .payroll-app .panel,
+.app-shell .payroll-app .card,
+.app-shell .payroll-app .compare,
+.app-shell .payroll-app .compare-panel,
+.app-shell .payroll-app .chat-analysis,
+.app-shell .payroll-app .ppv-panel,
+.app-shell .payroll-app .chart-card {
+	background: #1f2836;
+	border-color: #3a4556;
+	color: #e7ebf0;
+}
+
+.app-shell .payroll-app .controls,
+.app-shell .payroll-app .table-wrap,
+.app-shell .payroll-app .detail,
+.app-shell .payroll-app .stats,
+.app-shell .payroll-app .compare-grid,
+.app-shell .payroll-app .chat-columns {
+	background: #202a3a;
+	border-color: #3a4556;
+}
+
+.app-shell .payroll-app table {
+	background: #1f2836;
+	color: #e7ebf0;
+}
+
+.app-shell .payroll-app thead {
+	background: #263246;
+}
+
+.app-shell .payroll-app tbody tr:nth-child(odd) {
+	background: #1c2533;
+}
+
+.app-shell .payroll-app tbody tr:hover {
+	background: #2a3648;
 }
