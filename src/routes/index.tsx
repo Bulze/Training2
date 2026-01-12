@@ -541,7 +541,7 @@ function AdminPanel() {
 	return (
 		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "management" | "training")}>
 			<div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">
-				<Card className="bg-slate-900 border-slate-800 h-fit">
+				<Card className="chatter-panel h-fit">
 					<CardHeader>
 						<CardTitle className="text-slate-100">Admin</CardTitle>
 						<CardDescription className="text-slate-400">
@@ -581,7 +581,7 @@ function ManagementPanel() {
 	return (
 		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "payroll" | "roles")}>
 			<div className="grid grid-cols-1 xl:grid-cols-[220px_1fr] gap-6">
-				<Card className="bg-slate-900 border-slate-800 h-fit">
+				<Card className="chatter-panel h-fit">
 					<CardHeader>
 						<CardTitle className="text-slate-100">Management</CardTitle>
 						<CardDescription className="text-slate-400">
@@ -625,7 +625,7 @@ function TrainingPanel() {
 	return (
 		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "create" | "manage" | "submissions")}>
 			<div className="grid grid-cols-1 xl:grid-cols-[220px_1fr] gap-6">
-				<Card className="bg-slate-900 border-slate-800 h-fit">
+				<Card className="chatter-panel h-fit">
 					<CardHeader>
 						<CardTitle className="text-slate-100">Training</CardTitle>
 						<CardDescription className="text-slate-400">
@@ -781,7 +781,7 @@ function CreateTrainingPanel() {
 
 	return (
 		<div className="space-y-6">
-			<Card className="bg-slate-900 border-slate-800">
+			<Card className="chatter-panel">
 				<CardHeader>
 					<CardTitle className="text-slate-100">Create New Training Module</CardTitle>
 					<CardDescription className="text-slate-400">Upload a video and create quiz questions with ideal answers</CardDescription>
@@ -954,7 +954,7 @@ function CreateTrainingPanel() {
 				</CardContent>
 			</Card>
 
-			<Card className="bg-slate-900 border-slate-800">
+			<Card className="chatter-panel">
 				<CardHeader>
 					<CardTitle className="text-slate-100">Existing Training Modules ({videos.length})</CardTitle>
 				</CardHeader>
@@ -1056,7 +1056,7 @@ function ManageTestsPanel() {
 
 	if (editingVideo) {
 		return (
-			<Card className="bg-slate-900 border-slate-800">
+			<Card className="chatter-panel">
 				<CardHeader>
 					<CardTitle className="text-slate-100">Edit Test: {editingVideo.title}</CardTitle>
 					<CardDescription className="text-slate-400">Update test questions and settings</CardDescription>
@@ -1172,7 +1172,7 @@ function ManageTestsPanel() {
 	}
 
 	return (
-		<Card className="bg-slate-900 border-slate-800">
+		<Card className="chatter-panel">
 			<CardHeader>
 				<CardTitle className="text-slate-100">Manage Tests ({videos.length})</CardTitle>
 				<CardDescription className="text-slate-400">Edit or delete existing training tests</CardDescription>
@@ -1261,14 +1261,14 @@ function UserApprovalsPanel() {
 
 	return (
 		<div className="space-y-6">
-			<Card className="bg-slate-900 border-slate-800">
+			<Card className="chatter-panel">
 				<CardHeader>
 					<CardTitle className="text-slate-100">Pending Approvals ({pending.length})</CardTitle>
 					<CardDescription className="text-slate-400">Approve or reject new users</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-4">
 					{pending.map((user) => (
-						<div key={user.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-lg border border-slate-800 bg-slate-800/40">
+						<div key={user.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-lg border border-slate-700 chatter-panel">
 							<div>
 								<p className="text-slate-100 font-medium">{user.name}</p>
 								<p className="text-sm text-slate-400">{user.email}</p>
@@ -1304,14 +1304,14 @@ function UserApprovalsPanel() {
 				</CardContent>
 			</Card>
 
-			<Card className="bg-slate-900 border-slate-800">
+			<Card className="chatter-panel">
 				<CardHeader>
 					<CardTitle className="text-slate-100">Approved Users ({approved.length})</CardTitle>
 					<CardDescription className="text-slate-400">Manage approved access</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-4">
 					{approved.map((user) => (
-						<div key={user.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-lg border border-slate-800 bg-slate-800/40">
+						<div key={user.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-lg border border-slate-700 chatter-panel">
 							<div>
 								<p className="text-slate-100 font-medium">{user.name}</p>
 								<p className="text-sm text-slate-400">{user.email}</p>
@@ -2376,7 +2376,7 @@ function TrainingRolesPanel() {
 	}, [trainingUsers, search]);
 
 	return (
-		<Card className="bg-slate-900 border-slate-800">
+		<Card className="chatter-panel">
 			<CardHeader>
 				<CardTitle className="text-slate-100">Roles & Inflow Mapping</CardTitle>
 				<CardDescription className="text-slate-400">
@@ -2390,7 +2390,7 @@ function TrainingRolesPanel() {
 						onChange={(e) => setSearch(e.target.value)}
 						placeholder="Search user..."
 					/>
-					<div className="border border-slate-800 rounded-lg bg-slate-800/30 divide-y divide-slate-800 overflow-hidden">
+					<div className="border border-slate-700 rounded-lg chatter-panel divide-y divide-slate-700 overflow-hidden">
 						{filteredUsers.map((user) => {
 							const active = user.id === selectedUserId;
 							return (
@@ -2436,7 +2436,7 @@ function TrainingRolesPanel() {
 						const bonusDraft = getBonusDraft(selectedUser.id);
 
 						return (
-							<Card className="bg-slate-900/40 border-slate-800">
+							<Card className="chatter-panel">
 								<CardHeader className="pb-4">
 									<CardTitle className="text-slate-100 flex items-center justify-between gap-4">
 										<span className="truncate">{selectedUser.name}</span>
@@ -2453,7 +2453,7 @@ function TrainingRolesPanel() {
 										<div className="space-y-2">
 											<Label>Role</Label>
 											<select
-												className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+												className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100"
 												value={role}
 												onChange={(e) => updateEdit(selectedUser.id, { role: e.target.value })}
 											>
@@ -2482,7 +2482,7 @@ function TrainingRolesPanel() {
 											{(meta.bonus_entries ?? []).map((entry) => (
 												<div
 													key={entry.id}
-													className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm"
+													className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm"
 												>
 													<div className="text-slate-200">
 														{getBonusLabel(entry.type)} • {entry.date} • ${Number(entry.amount).toFixed(2)}
@@ -2502,7 +2502,7 @@ function TrainingRolesPanel() {
 											<div className="space-y-2">
 												<Label>Type</Label>
 												<select
-													className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+													className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100"
 													value={bonusDraft.type}
 													onChange={(e) => updateBonusDraft(selectedUser.id, { type: e.target.value as "shift" | "double_shift" | "holiday" })}
 												>
@@ -2697,7 +2697,7 @@ function AllSubmissionsPanel() {
 	].sort((a, b) => b.timestamp - a.timestamp);
 
 	return (
-		<Card className="bg-slate-900 border-slate-800">
+		<Card className="chatter-panel">
 			<CardHeader>
 				<CardTitle className="text-slate-100">All User Submissions ({submissions.length})</CardTitle>
 				<CardDescription className="text-slate-400">View all quiz completions and answers from all users</CardDescription>
@@ -4049,7 +4049,7 @@ function VideoPlayer({
 
 	return (
 		<div className="space-y-6">
-			<Card className="bg-slate-900 border-slate-800">
+			<Card className="chatter-panel">
 				<CardHeader>
 					<div className="flex justify-between items-start">
 						<div>
@@ -4643,7 +4643,7 @@ function CompletionScreen({
 function PendingApprovalScreen({ user, onLogout }: { user: UsersModel; onLogout: () => void }) {
 	return (
 		<div className="min-h-screen app-shell flex items-center justify-center px-4">
-			<Card className="w-full max-w-lg bg-slate-900 border-slate-800">
+			<Card className="w-full max-w-lg chatter-panel">
 				<CardHeader className="text-center">
 					<CardTitle className="text-2xl text-slate-100">Approval Required</CardTitle>
 					<CardDescription className="text-slate-400">
@@ -5027,6 +5027,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 		</div>
 	);
 }
+
 
 
 
