@@ -30,6 +30,7 @@ import {
 	endOfMonth,
 	endOfWeek,
 	format,
+	getDay,
 	isSameMonth,
 	parseISO,
 	startOfMonth,
@@ -2934,25 +2935,15 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		return map;
 	}, [dailyEarned]);
 
-	const getCutPeriodStart = (date: Date) => {
-		let start = new Date(date.getFullYear(), date.getMonth(), 26);
-		if (date < start) {
-			start = new Date(start.getFullYear(), start.getMonth() - 1, 26);
-		}
-		while (date >= addDays(start, 14)) {
-			start = addDays(start, 14);
-		}
-		return start;
-	};
-
 	const payPeriods = useMemo(() => {
 		if (!dailyEarned.length) return [];
 		const first = dailyEarned[0].date;
 		const last = dailyEarned[dailyEarned.length - 1].date;
 
-		// Agency cut runs in 14-day cycles starting on the 26th (ex: 26-8, 9-22).
-		const PERIOD_DAYS = 14;
-		let start = getCutPeriodStart(first);
+		// Cut runs Friday->Thursday (weekly). Friday starts the period, next Friday is excluded.
+		const PERIOD_DAYS = 7;
+		let start = first;
+		while (getDay(start) !== 5) start = subDays(start, 1);
 
 		const periods: Array<{ start: Date; endExclusive: Date; cutoff: Date; total: number; bonusTotal: number; key: string }> = [];
 		while (start <= addDays(last, 1)) {
@@ -3119,30 +3110,6 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 								</CardContent>
 							</Card>
 						</div>
-						{currentPeriod && (
-							<Card className="bg-slate-900/40 border-slate-800">
-								<CardHeader className="py-4">
-									<CardTitle className="text-sm text-slate-200">Current Cut</CardTitle>
-									<CardDescription className="text-slate-400">
-										{format(currentPeriod.start, "MMM d")} to {format(subDays(currentPeriod.endExclusive, 1), "MMM d")}
-									</CardDescription>
-								</CardHeader>
-								<CardContent className="pt-0">
-									<div className="flex items-baseline justify-between">
-										<span className="text-slate-400 text-sm">Cut earnings</span>
-										<span className="text-lg font-semibold text-amber-300 tabular-nums">
-											{formatCurrency(currentPeriod.total)}
-										</span>
-									</div>
-									<div className="mt-2 flex items-baseline justify-between">
-										<span className="text-slate-400 text-sm">Cut bonus</span>
-										<span className="text-sm font-semibold text-sky-300 tabular-nums">
-											{formatCurrency(currentPeriod.bonusTotal)}
-										</span>
-									</div>
-								</CardContent>
-							</Card>
-						)}
 						{currentPeriod && (
 							<Card className="bg-slate-900/40 border-slate-800">
 								<CardHeader className="py-4">
