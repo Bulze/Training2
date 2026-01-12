@@ -3265,7 +3265,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	};
 
 	return (
-		<Card className="chatter-dashboard chatter-light backdrop-blur">
+		<Card className="chatter-dashboard chatter-neo backdrop-blur">
 			<CardHeader className="space-y-1">
 				<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 					<div className="min-w-0">
