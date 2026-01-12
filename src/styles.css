@@ -200,9 +200,9 @@ code {
 }
 
 .chatter-panel {
-	background: #1f2836;
-	border: 1px solid #3a4556;
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+	background: #171f2b;
+	border: 1px solid #2e3949;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .stat-card {
