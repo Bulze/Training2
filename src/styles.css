@@ -839,6 +839,13 @@ code {
 	border-color: #3c475b;
 }
 
+.chatter-neo .calendar-base.calendar-cell-low,
+.chatter-neo .calendar-base.calendar-cell-mid,
+.chatter-neo .calendar-base.calendar-cell-strong {
+	background-blend-mode: screen;
+	background-color: #2f394a;
+}
+
 .chatter-neo .calendar-cutoff {
 	background: #2f3a4b;
 	border-color: #f0b429;
@@ -855,6 +862,15 @@ code {
 	color: #ffffff;
 	text-transform: uppercase;
 	letter-spacing: 0.06em;
+}
+
+.chatter-neo .calendar-cut {
+	align-self: flex-end;
+	font-size: 10px;
+	font-weight: 600;
+	color: #f0b429;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
 }
 .app-shell button,
 .app-shell .btn {

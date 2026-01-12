@@ -3604,6 +3604,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 																{salesAmount ? formatCurrency(salesAmount, 0) : ""}
 															</span>
 														</div>
+														{cutoff && <span className="calendar-cut">CUT</span>}
 														{dayBonus > 0 && (
 															<span className="calendar-badge">
 																{formatCurrency(dayBonus, 0)}
