@@ -1345,6 +1345,7 @@ function PayrollPanel() {
 	const [dateFrom, setDateFrom] = useState("");
 	const [dateTo, setDateTo] = useState("");
 	const [dateFilterTouched, setDateFilterTouched] = useState(false);
+	const [allowDateFilter, setAllowDateFilter] = useState(false);
 	const [minDate, setMinDate] = useState("");
 	const [maxDate, setMaxDate] = useState("");
 	const [defaultPercent, setDefaultPercent] = useState(9);
@@ -1414,6 +1415,7 @@ function PayrollPanel() {
 		setUpdatedAt(updatedAtIso);
 		setDateFrom((prev) => prev || snapshot.min_date || "");
 		setDateTo((prev) => prev || snapshot.max_date || "");
+		setAllowDateFilter(true);
 	};
 
 	useEffect(() => {
@@ -1578,7 +1580,7 @@ function PayrollPanel() {
 		if (chatFile) {
 			formData.append("chat_file", chatFile);
 		}
-		if (dateFilterTouched) {
+		if (dateFilterTouched && allowDateFilter) {
 			if (dateFrom) formData.append("date_from", dateFrom);
 			if (dateTo) formData.append("date_to", dateTo);
 		}
@@ -1662,6 +1664,7 @@ function PayrollPanel() {
 			setEmployeeSearch("");
 			setShowAllEmployees(false);
 			setDateFilterTouched(false);
+			setAllowDateFilter(true);
 			setSelectedEmployeeName(null);
 			setActiveTab("detail");
 
@@ -1860,7 +1863,11 @@ function PayrollPanel() {
 						<input
 							type="file"
 							accept=".xlsx,.xlsm,.xltx,.xltm"
-							onChange={(e) => setSalesFile(e.target.files?.[0] || null)}
+							onChange={(e) => {
+								setSalesFile(e.target.files?.[0] || null);
+								setDateFilterTouched(false);
+								setAllowDateFilter(false);
+							}}
 						/>
 						<button type="button" className="btn accent" onClick={handleAnalyze} disabled={isAnalyzing}>
 							{isAnalyzing ? "Loading…" : "Load + Calculate"}
