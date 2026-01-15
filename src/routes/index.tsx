@@ -64,6 +64,7 @@ const CHATTER_ADMIN_STORE = {
 	version: "1",
 	task: "chatter_admin",
 };
+const BULZE_DEFAULT_NAMES = ["djozli", "bash", "matke", "voki", "totadjes"];
 const PAYROLL_PERCENT_STORE = {
 	id: "payroll_percent_v1",
 	namespace: "training_app",
@@ -171,6 +172,7 @@ type ChatterAdminMeta = {
 	manual_penalty?: number;
 	admin_notes?: string;
 	admin_review?: string;
+	bulze_share?: boolean;
 };
 
 const payrollClient = DataStoreClient.getInstance();
@@ -183,6 +185,8 @@ const valuesToObject = (values: Value[]) => {
 	}
 	return obj;
 };
+
+const normalizeName = (value?: string | null) => (value || "").trim().toLowerCase();
 
 const buildPayrollIndex = (key: string) => ({
 	fields: ["key"],
@@ -299,6 +303,7 @@ const fetchChatterAdminMeta = async (userId: string) => {
 		manual_penalty?: number;
 		admin_notes?: string;
 		admin_review?: string;
+		bulze_share?: boolean;
 		updated_at?: string;
 	};
 	return {
@@ -308,6 +313,7 @@ const fetchChatterAdminMeta = async (userId: string) => {
 			manual_penalty: Number(record.manual_penalty ?? 0),
 			admin_notes: String(record.admin_notes ?? ""),
 			admin_review: String(record.admin_review ?? ""),
+			bulze_share: Boolean(record.bulze_share ?? false),
 		},
 		updatedAt: record.updated_at ?? null,
 	};
@@ -322,6 +328,7 @@ const saveChatterAdminMeta = async (userId: string, meta: ChatterAdminMeta) => {
 		CreateValue(DataType.number, Number(meta.manual_penalty ?? 0), "manual_penalty"),
 		CreateValue(DataType.string, meta.admin_notes ?? "", "admin_notes"),
 		CreateValue(DataType.string, meta.admin_review ?? "", "admin_review"),
+		CreateValue(DataType.boolean, Boolean(meta.bulze_share ?? false), "bulze_share"),
 		CreateValue(DataType.string, updatedAt, "updated_at"),
 	]);
 
@@ -587,11 +594,10 @@ function AdminPanel() {
 }
 
 function ManagementPanel() {
-	const [activeTab, setActiveTab] = useState<"users" | "payroll" | "roles">("users");
-	const [showFeedback, setShowFeedback] = useState(false);
+	const [activeTab, setActiveTab] = useState<"feedback" | "users" | "payroll" | "roles">("users");
 
 	return (
-		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "payroll" | "roles")}>
+		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "feedback" | "users" | "payroll" | "roles")}>
 			<div className="grid grid-cols-1 xl:grid-cols-[220px_1fr] gap-6">
 				<Card className="chatter-panel h-fit">
 					<CardHeader>
@@ -602,6 +608,9 @@ function ManagementPanel() {
 					</CardHeader>
 					<CardContent>
 						<TabsList className="flex flex-col w-full h-auto bg-transparent border-0 p-0 gap-2">
+							<TabsTrigger value="feedback" className="justify-start w-full flex-none">
+								Feedback
+							</TabsTrigger>
 							<TabsTrigger value="users" className="justify-start w-full flex-none">
 								User approvals
 							</TabsTrigger>
@@ -616,17 +625,10 @@ function ManagementPanel() {
 				</Card>
 
 				<div className="min-w-0">
+					<TabsContent value="feedback" className="mt-0">
+						<ChatterFeedbackPanel />
+					</TabsContent>
 					<TabsContent value="users" className="mt-0">
-						<div className="mb-4">
-							<Button
-								type="button"
-								variant={showFeedback ? "default" : "outline"}
-								onClick={() => setShowFeedback((prev) => !prev)}
-							>
-								{showFeedback ? "Hide Feedback" : "Feedback"}
-							</Button>
-						</div>
-						{showFeedback && <ChatterFeedbackPanel />}
 						<UserApprovalsPanel />
 					</TabsContent>
 					<TabsContent value="payroll" className="mt-0">
@@ -2664,7 +2666,7 @@ function TrainingRolesPanel() {
 		const meta = selectedMetaResponse?.meta;
 		setMetaDrafts((prev) => ({
 			...prev,
-			[selectedUserId]: meta ?? { manual_bonus: 0, bonus_entries: [], manual_penalty: 0, admin_notes: "", admin_review: "" },
+			[selectedUserId]: meta ?? { manual_bonus: 0, bonus_entries: [], manual_penalty: 0, admin_notes: "", admin_review: "", bulze_share: false },
 		}));
 		setMetaUpdatedAt((prev) => ({
 			...prev,
@@ -2866,7 +2868,7 @@ function TrainingRolesPanel() {
 						const draft = edits[selectedUser.id] || {};
 						const role = (draft.role ?? selectedUser.role ?? DEFAULT_ROLE) as string;
 						const inflow = (draft.inflow_username ?? selectedUser.inflow_username ?? "") as string;
-						const meta = metaDrafts[selectedUser.id] ?? { manual_bonus: 0, bonus_entries: [], manual_penalty: 0, admin_notes: "", admin_review: "" };
+						const meta = metaDrafts[selectedUser.id] ?? { manual_bonus: 0, bonus_entries: [], manual_penalty: 0, admin_notes: "", admin_review: "", bulze_share: false };
 						const metaUpdated = metaUpdatedAt[selectedUser.id] ?? null;
 						const bonusDraft = getBonusDraft(selectedUser.id);
 
@@ -2903,6 +2905,20 @@ function TrainingRolesPanel() {
 												onChange={(e) => updateEdit(selectedUser.id, { inflow_username: e.target.value })}
 												placeholder="inflow username"
 											/>
+										</div>
+									</div>
+									<div className="space-y-2">
+										<Label>Bulze share</Label>
+										<div className="flex items-center gap-2">
+											<input
+												type="checkbox"
+												className="h-4 w-4 accent-slate-200"
+												checked={Boolean(meta.bulze_share)}
+												onChange={(e) => updateMeta(selectedUser.id, { bulze_share: e.target.checked })}
+											/>
+											<span className="text-sm text-slate-300">
+												Add to Bulze earnings (1% of monthly sales)
+											</span>
 										</div>
 									</div>
 
@@ -3469,10 +3485,13 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const [snapshot, setSnapshot] = useState<PayrollSnapshot | null>(null);
 	const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 	const [calendarMonth, setCalendarMonth] = useState<Date | null>(null);
+	const [showBulzeDetails, setShowBulzeDetails] = useState(false);
 	const { data: chatterMetaResponse } = useQuery({
 		queryKey: ["chatterAdminMeta", user.id],
 		queryFn: () => fetchChatterAdminMeta(user.id),
 	});
+	const usersOrm = UsersORM.getInstance();
+	const isBulzeUser = ["bulze"].includes(normalizeName(user.name)) || ["bulze"].includes(normalizeName(user.inflow_username));
 
 	const loadSnapshot = async () => {
 		const stored = await fetchPayrollSnapshot();
@@ -3489,6 +3508,31 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		? snapshot.employees.find((emp) => emp.employee.toLowerCase() === inflow.toLowerCase())
 		: null;
 
+	const { data: allUsers = [] } = useQuery({
+		queryKey: ["allUsers"],
+		queryFn: () => usersOrm.getAllUsers(),
+		enabled: isBulzeUser,
+	});
+	const allUserIds = useMemo(() => allUsers.map((u) => u.id).sort().join("|"), [allUsers]);
+	const { data: bulzeShareMeta = [] } = useQuery({
+		queryKey: ["bulzeShareMeta", allUserIds],
+		enabled: isBulzeUser && allUsers.length > 0,
+		queryFn: async () => {
+			const base = allUsers.filter((u) => !u.is_admin);
+			const results = await Promise.all(
+				base.map(async (u) => {
+					try {
+						const response = await fetchChatterAdminMeta(u.id);
+						return { user: u, meta: response.meta };
+					} catch {
+						return { user: u, meta: null };
+					}
+				}),
+			);
+			return results;
+		},
+	});
+
 	const percent = Number(employee?.percent ?? 0.09);
 	const chatterMeta = chatterMetaResponse?.meta ?? null;
 	const bonusEntries = Array.isArray(chatterMeta?.bonus_entries) ? chatterMeta.bonus_entries : [];
@@ -3497,6 +3541,41 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const computeShiftBonus = (value: number) => {
 		if (!Number.isFinite(value) || value <= 0) return 0;
 		return Math.floor(value / 500) * 15;
+	};
+
+	const getEmployeeMonthlySales = (emp: PayrollEmployee, monthStart: Date) => {
+		const monthEnd = endOfMonth(monthStart);
+		let total = 0;
+		const shifts = emp.shifts ?? [];
+		if (shifts.length) {
+			for (const shift of shifts) {
+				const dateKey = String(shift.date || "").slice(0, 10);
+				if (!dateKey) continue;
+				let date: Date | null = null;
+				try {
+					date = parseISO(dateKey);
+				} catch {
+					date = null;
+				}
+				if (!date || date < monthStart || date > monthEnd) continue;
+				total += Number(shift.sales ?? 0);
+			}
+			return total;
+		}
+		const daily = emp.daily_sales ?? {};
+		for (const [dateKeyRaw, value] of Object.entries(daily)) {
+			const dateKey = String(dateKeyRaw || "").slice(0, 10);
+			if (!dateKey) continue;
+			let date: Date | null = null;
+			try {
+				date = parseISO(dateKey);
+			} catch {
+				date = null;
+			}
+			if (!date || date < monthStart || date > monthEnd) continue;
+			total += Number(value ?? 0);
+		}
+		return total;
 	};
 
 	const dailyEarned = useMemo(() => {
@@ -3755,6 +3834,50 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		if (index <= 0) return null;
 		return payPeriods[index - 1];
 	}, [currentPeriod, payPeriods]);
+
+	const bulzeAssignedUsers = useMemo(() => {
+		const fallbackNames = new Set(BULZE_DEFAULT_NAMES);
+		return bulzeShareMeta.filter(({ user: rowUser, meta }) => {
+			const explicit = meta?.bulze_share;
+			if (explicit === true) return true;
+			if (explicit === false) return false;
+			const name = normalizeName(rowUser.name);
+			const inflowName = normalizeName(rowUser.inflow_username);
+			return (name && fallbackNames.has(name)) || (inflowName && fallbackNames.has(inflowName));
+		});
+	}, [bulzeShareMeta]);
+
+	const payrollByName = useMemo(() => {
+		const map = new Map<string, PayrollEmployee>();
+		for (const emp of snapshot?.employees ?? []) {
+			const key = normalizeName(emp.employee);
+			if (key && !map.has(key)) map.set(key, emp);
+		}
+		return map;
+	}, [snapshot]);
+
+	const bulzeMonthlyEarnings = useMemo(() => {
+		if (!isBulzeUser || !calendarMonth || !snapshot) return [];
+		const monthStart = startOfMonth(calendarMonth);
+		return bulzeAssignedUsers.map(({ user: rowUser }) => {
+			const inflowName = normalizeName(rowUser.inflow_username);
+			const name = normalizeName(rowUser.name);
+			const employeeMatch = (inflowName && payrollByName.get(inflowName))
+				|| (name && payrollByName.get(name))
+				|| null;
+			const totalSales = employeeMatch ? getEmployeeMonthlySales(employeeMatch, monthStart) : 0;
+			return {
+				user: rowUser,
+				sales: totalSales,
+				earned: totalSales * 0.01,
+			};
+		});
+	}, [isBulzeUser, calendarMonth, snapshot, bulzeAssignedUsers, payrollByName]);
+
+	const bulzeMonthlyTotal = useMemo(
+		() => bulzeMonthlyEarnings.reduce((sum, entry) => sum + entry.earned, 0),
+		[bulzeMonthlyEarnings],
+	);
 
 	const formatCurrency = (value: unknown, digits = 2) => {
 		const amount = typeof value === "number" ? value : Number(value);
@@ -4033,6 +4156,56 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 													</ul>
 												</div>
 											</div>
+											{isBulzeUser && (
+												<div className="mt-4 space-y-3 text-sm">
+													<div className="flex flex-wrap items-center justify-between gap-2">
+														<span className="text-slate-400">
+															Bulze share (1% of assigned chatters{calendarMonth ? `, ${format(calendarMonth, "MMM yyyy")}` : ""})
+														</span>
+														<div className="flex items-center gap-2">
+															<span className="text-slate-100 font-semibold tabular-nums">
+																{formatCurrency(bulzeMonthlyTotal)}
+															</span>
+															{bulzeMonthlyEarnings.length > 0 && (
+																<Button
+																	variant="outline"
+																	size="sm"
+																	onClick={() => setShowBulzeDetails((prev) => !prev)}
+																>
+																	{showBulzeDetails ? "Hide" : "Show all"}
+																</Button>
+															)}
+														</div>
+													</div>
+													{bulzeMonthlyEarnings.length === 0 && (
+														<p className="text-slate-500">No assigned chatters yet.</p>
+													)}
+													{showBulzeDetails && bulzeMonthlyEarnings.length > 0 && (
+														<div className="rounded border border-slate-700/60 bg-slate-800/70 p-3 chatter-panel">
+															<table className="w-full text-sm">
+																<thead>
+																	<tr className="text-left text-slate-400">
+																		<th className="pb-2">Chatter</th>
+																		<th className="pb-2">Inflow</th>
+																		<th className="pb-2 text-right">Monthly sales</th>
+																		<th className="pb-2 text-right">Bulze 1%</th>
+																	</tr>
+																</thead>
+																<tbody className="text-slate-200">
+																	{bulzeMonthlyEarnings.map((entry) => (
+																		<tr key={entry.user.id} className="border-t border-slate-700/60">
+																			<td className="py-2">{entry.user.name || entry.user.email}</td>
+																			<td className="py-2 text-slate-400">{entry.user.inflow_username || "-"}</td>
+																			<td className="py-2 text-right">{formatCurrency(entry.sales)}</td>
+																			<td className="py-2 text-right text-emerald-300">{formatCurrency(entry.earned)}</td>
+																		</tr>
+																	))}
+																</tbody>
+															</table>
+														</div>
+													)}
+												</div>
+											)}
 										</div>
 									)}
 								</CardContent>
