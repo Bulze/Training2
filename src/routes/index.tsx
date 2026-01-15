@@ -2727,6 +2727,7 @@ function AllSubmissionsPanel() {
 	const usersOrm = UsersORM.getInstance();
 	const videosOrm = VideosORM.getInstance();
 	const sessionsOrm = TrainingSessionsORM.getInstance();
+	const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
 	const { data: allCompletions = [] } = useQuery({
 		queryKey: ["allCompletions"],
@@ -2834,30 +2835,40 @@ function AllSubmissionsPanel() {
 							);
 
 							const passed = session ? completion.score >= session.pass_threshold : false;
+							const entryKey = `completion::${completion.id}`;
+							const isOpen = expandedKey === entryKey;
 
 							return (
 								<Card key={completion.id} className="bg-slate-800 border-slate-700">
 									<CardHeader>
-										<div className="flex justify-between items-start">
-											<div>
-												<CardTitle className="text-lg">
-													{user?.name || "Unknown User"} - {video?.title || "Unknown Video"}
-												</CardTitle>
-												<CardDescription>
-													Score: {completion.score}/{session?.total_questions || "?"} |{" "}
-													{passed ? (
-														<span className="text-slate-200 font-medium">PASSED</span>
-													) : (
-														<span className="text-slate-200 font-medium">FAILED</span>
-													)}
-												</CardDescription>
+										<button
+											type="button"
+											onClick={() => setExpandedKey(isOpen ? null : entryKey)}
+											className="w-full text-left"
+										>
+											<div className="flex items-start justify-between gap-4">
+												<div className="min-w-0">
+													<CardTitle className="text-lg">{user?.name || "Unknown User"}</CardTitle>
+													<CardDescription className="truncate">
+														{video?.title || "Unknown Video"}
+													</CardDescription>
+													<div className="text-sm text-slate-300 mt-1">
+														Score: {completion.score}/{session?.total_questions || "?"}
+													</div>
+												</div>
+												<div className="flex items-center gap-3">
+													<Badge variant={passed ? "default" : "destructive"}>
+														{passed ? "Passed" : "Failed"}
+													</Badge>
+													<span className="text-xs text-slate-400">
+														{isOpen ? "Hide details" : "View details"}
+													</span>
+												</div>
 											</div>
-											<Badge variant={passed ? "default" : "destructive"}>
-												{passed ? "Passed" : "Failed"}
-											</Badge>
-										</div>
+										</button>
 									</CardHeader>
-									<CardContent>
+									{isOpen && (
+										<CardContent>
 										<div className="space-y-4">
 											<div className="text-sm text-slate-300">
 												<p>
@@ -2900,6 +2911,7 @@ function AllSubmissionsPanel() {
 											</div>
 										</div>
 									</CardContent>
+									)}
 								</Card>
 							);
 						}
@@ -2913,63 +2925,78 @@ function AllSubmissionsPanel() {
 						const submittedAt = submission.latestAttempt
 							? new Date(toEpochSeconds(submission.latestAttempt.attempted_at) * 1000).toLocaleString()
 							: "Unknown";
+						const entryKey = `attempt::${submission.user_id}::${submission.video_id}`;
+						const isOpen = expandedKey === entryKey;
 
 						return (
 							<Card key={`${submission.user_id}::${submission.video_id}`} className="chatter-panel">
 								<CardHeader>
-									<div className="flex justify-between items-start">
-										<div>
-											<CardTitle className="text-lg">
-												{user?.name || "Unknown User"} - {video?.title || "Unknown Video"}
-											</CardTitle>
-											<CardDescription>
-												Score: {score}/{totalQuestions} |{" "}
-												<span className="text-slate-200 font-medium">NO COMPLETION</span>
-											</CardDescription>
+									<button
+										type="button"
+										onClick={() => setExpandedKey(isOpen ? null : entryKey)}
+										className="w-full text-left"
+									>
+										<div className="flex items-start justify-between gap-4">
+											<div className="min-w-0">
+												<CardTitle className="text-lg">{user?.name || "Unknown User"}</CardTitle>
+												<CardDescription className="truncate">
+													{video?.title || "Unknown Video"}
+												</CardDescription>
+												<div className="text-sm text-slate-300 mt-1">
+													Score: {score}/{totalQuestions}
+												</div>
+											</div>
+											<div className="flex items-center gap-3">
+												<Badge variant="secondary">Incomplete</Badge>
+												<span className="text-xs text-slate-400">
+													{isOpen ? "Hide details" : "View details"}
+												</span>
+											</div>
 										</div>
-										<Badge variant="secondary">Incomplete</Badge>
-									</div>
+									</button>
 								</CardHeader>
-								<CardContent>
-									<div className="space-y-4">
-										<div className="text-sm text-slate-300">
-											<p>
-												<strong>Latest Attempt:</strong> {submittedAt}
-											</p>
-											<p>
-												<strong>Total Question Attempts:</strong> {submission.allAttempts.length}
-											</p>
-										</div>
+								{isOpen && (
+									<CardContent>
+										<div className="space-y-4">
+											<div className="text-sm text-slate-300">
+												<p>
+													<strong>Latest Attempt:</strong> {submittedAt}
+												</p>
+												<p>
+													<strong>Total Question Attempts:</strong> {submission.allAttempts.length}
+												</p>
+											</div>
 
-										<Separator />
+											<Separator />
 
-										<div className="space-y-3">
-											<Label className="text-base">Latest Answers:</Label>
-											{submission.latestAttempts.length > 0 ? (
-												submission.latestAttempts.map((attempt, idx) => (
-													<div key={attempt.id} className="p-3 chatter-panel rounded-lg">
-														<div className="flex justify-between items-start mb-2">
-															<p className="text-sm font-medium text-slate-200">Answer {idx + 1}</p>
-															<Badge variant={attempt.is_correct ? "default" : "secondary"}>
-																{attempt.is_correct ? "Correct" : "Incorrect"}
-															</Badge>
-														</div>
-														<p className="text-sm text-slate-300 mb-1">
-															<strong>Answer:</strong> {attempt.user_answer}
-														</p>
-														{attempt.ai_feedback && (
-															<p className="text-xs text-slate-400 italic">
-																<strong>AI Feedback:</strong> {attempt.ai_feedback}
+											<div className="space-y-3">
+												<Label className="text-base">Latest Answers:</Label>
+												{submission.latestAttempts.length > 0 ? (
+													submission.latestAttempts.map((attempt, idx) => (
+														<div key={attempt.id} className="p-3 chatter-panel rounded-lg">
+															<div className="flex justify-between items-start mb-2">
+																<p className="text-sm font-medium text-slate-200">Answer {idx + 1}</p>
+																<Badge variant={attempt.is_correct ? "default" : "secondary"}>
+																	{attempt.is_correct ? "Correct" : "Incorrect"}
+																</Badge>
+															</div>
+															<p className="text-sm text-slate-300 mb-1">
+																<strong>Answer:</strong> {attempt.user_answer}
 															</p>
-														)}
-													</div>
-												))
-											) : (
-												<p className="text-sm text-slate-400">No individual answers recorded</p>
-											)}
+															{attempt.ai_feedback && (
+																<p className="text-xs text-slate-400 italic">
+																	<strong>AI Feedback:</strong> {attempt.ai_feedback}
+																</p>
+															)}
+														</div>
+													))
+												) : (
+													<p className="text-sm text-slate-400">No individual answers recorded</p>
+												)}
+											</div>
 										</div>
-									</div>
-								</CardContent>
+									</CardContent>
+								)}
 							</Card>
 						);
 					})}
