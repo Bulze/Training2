@@ -1258,6 +1258,8 @@ function UserApprovalsPanel() {
 
 	const pending = users.filter((user) => !user.is_admin && !user.is_approved);
 	const approved = users.filter((user) => !user.is_admin && user.is_approved);
+	const approvedChatters = approved.filter((user) => (user.role || DEFAULT_ROLE) === "chatter");
+	const approvedRecruits = approved.filter((user) => (user.role || DEFAULT_ROLE) !== "chatter");
 
 	return (
 		<div className="space-y-6">
@@ -1306,11 +1308,11 @@ function UserApprovalsPanel() {
 
 			<Card className="chatter-panel">
 				<CardHeader>
-					<CardTitle className="text-slate-100">Approved Users ({approved.length})</CardTitle>
-					<CardDescription className="text-slate-400">Manage approved access</CardDescription>
+					<CardTitle className="text-slate-100">Approved Chatters ({approvedChatters.length})</CardTitle>
+					<CardDescription className="text-slate-400">Manage approved chatter access</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-4">
-					{approved.map((user) => (
+					{approvedChatters.map((user) => (
 						<div key={user.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-lg border border-slate-700 chatter-panel">
 							<div>
 								<p className="text-slate-100 font-medium">{user.name}</p>
@@ -1330,8 +1332,40 @@ function UserApprovalsPanel() {
 							</div>
 						</div>
 					))}
-					{approved.length === 0 && (
-						<p className="text-center text-slate-500 py-6">No approved users yet</p>
+					{approvedChatters.length === 0 && (
+						<p className="text-center text-slate-500 py-6">No approved chatters yet</p>
+					)}
+				</CardContent>
+			</Card>
+
+			<Card className="chatter-panel">
+				<CardHeader>
+					<CardTitle className="text-slate-100">Approved Recruits ({approvedRecruits.length})</CardTitle>
+					<CardDescription className="text-slate-400">Manage approved recruit access</CardDescription>
+				</CardHeader>
+				<CardContent className="space-y-4">
+					{approvedRecruits.map((user) => (
+						<div key={user.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-lg border border-slate-700 chatter-panel">
+							<div>
+								<p className="text-slate-100 font-medium">{user.name}</p>
+								<p className="text-sm text-slate-400">{user.email}</p>
+								<p className="text-xs text-slate-500">
+									Role: {user.role || DEFAULT_ROLE} | Inflow: {user.inflow_username || "ƒ?""}
+								</p>
+							</div>
+							<div className="flex gap-2">
+								<Button
+									variant="outline"
+									onClick={() => updateUser.mutate({ ...user, is_approved: false })}
+									disabled={updateUser.isPending}
+								>
+									Disable Access
+								</Button>
+							</div>
+						</div>
+					))}
+					{approvedRecruits.length === 0 && (
+						<p className="text-center text-slate-500 py-6">No approved recruits yet</p>
 					)}
 				</CardContent>
 			</Card>
@@ -2382,6 +2416,25 @@ function TrainingRolesPanel() {
 		});
 	}, [trainingUsers, search]);
 
+	const groupedUsers = useMemo(() => {
+		const pending: UsersModel[] = [];
+		const approvedRecruits: UsersModel[] = [];
+		const approvedChatters: UsersModel[] = [];
+
+		for (const user of filteredUsers) {
+			const role = user.role || DEFAULT_ROLE;
+			if (!user.is_approved) {
+				pending.push(user);
+			} else if (role === "chatter") {
+				approvedChatters.push(user);
+			} else {
+				approvedRecruits.push(user);
+			}
+		}
+
+		return { pending, approvedRecruits, approvedChatters };
+	}, [filteredUsers]);
+
 	return (
 		<Card className="chatter-panel">
 			<CardHeader>
@@ -2398,7 +2451,66 @@ function TrainingRolesPanel() {
 						placeholder="Search user..."
 					/>
 					<div className="border border-slate-700 rounded-lg chatter-panel divide-y divide-slate-700 overflow-hidden">
-						{filteredUsers.map((user) => {
+						{groupedUsers.pending.length > 0 && (
+							<div className="px-4 py-2 text-xs uppercase tracking-wide text-slate-500">
+								Pending approval ({groupedUsers.pending.length})
+							</div>
+						)}
+						{groupedUsers.pending.map((user) => {
+							const active = user.id === selectedUserId;
+							return (
+								<button
+									key={user.id}
+									type="button"
+									onClick={() => setSelectedUserId(user.id)}
+									className={cn(
+										"w-full text-left px-4 py-3 hover:bg-slate-800/60 transition flex items-start justify-between gap-3",
+										active && "bg-slate-800/70",
+									)}
+								>
+									<div className="min-w-0">
+										<p className="text-slate-100 font-medium truncate">{user.name}</p>
+										<p className="text-xs text-slate-400 truncate">{user.inflow_username || user.email}</p>
+									</div>
+									<Badge variant="outline" className="border-slate-700 text-slate-200">
+										Pending
+									</Badge>
+								</button>
+							);
+						})}
+						{groupedUsers.approvedChatters.length > 0 && (
+							<div className="px-4 py-2 text-xs uppercase tracking-wide text-slate-500">
+								Approved chatters ({groupedUsers.approvedChatters.length})
+							</div>
+						)}
+						{groupedUsers.approvedChatters.map((user) => {
+							const active = user.id === selectedUserId;
+							return (
+								<button
+									key={user.id}
+									type="button"
+									onClick={() => setSelectedUserId(user.id)}
+									className={cn(
+										"w-full text-left px-4 py-3 hover:bg-slate-800/60 transition flex items-start justify-between gap-3",
+										active && "bg-slate-800/70",
+									)}
+								>
+									<div className="min-w-0">
+										<p className="text-slate-100 font-medium truncate">{user.name}</p>
+										<p className="text-xs text-slate-400 truncate">{user.inflow_username || user.email}</p>
+									</div>
+									<Badge variant="outline" className="border-slate-700 text-slate-200">
+										{user.role || DEFAULT_ROLE}
+									</Badge>
+								</button>
+							);
+						})}
+						{groupedUsers.approvedRecruits.length > 0 && (
+							<div className="px-4 py-2 text-xs uppercase tracking-wide text-slate-500">
+								Approved recruits ({groupedUsers.approvedRecruits.length})
+							</div>
+						)}
+						{groupedUsers.approvedRecruits.map((user) => {
 							const active = user.id === selectedUserId;
 							return (
 								<button
