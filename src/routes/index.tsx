@@ -588,6 +588,7 @@ function AdminPanel() {
 
 function ManagementPanel() {
 	const [activeTab, setActiveTab] = useState<"users" | "payroll" | "roles">("users");
+	const [showFeedback, setShowFeedback] = useState(false);
 
 	return (
 		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "payroll" | "roles")}>
@@ -616,7 +617,16 @@ function ManagementPanel() {
 
 				<div className="min-w-0">
 					<TabsContent value="users" className="mt-0">
-						<ChatterFeedbackPanel />
+						<div className="mb-4">
+							<Button
+								type="button"
+								variant={showFeedback ? "default" : "outline"}
+								onClick={() => setShowFeedback((prev) => !prev)}
+							>
+								{showFeedback ? "Hide Feedback" : "Feedback"}
+							</Button>
+						</div>
+						{showFeedback && <ChatterFeedbackPanel />}
 						<UserApprovalsPanel />
 					</TabsContent>
 					<TabsContent value="payroll" className="mt-0">
@@ -1247,6 +1257,7 @@ function ChatterFeedbackPanel() {
 		queryFn: fetchPayrollSnapshot,
 	});
 	const employees = payrollSnapshot?.snapshot?.employees ?? [];
+	const tosExemptUsers = useMemo(() => new Set(["bulze", "teddy"]), []);
 	const chatEmployees = useMemo(
 		() =>
 			employees.filter((emp) => {
@@ -1411,7 +1422,8 @@ function ChatterFeedbackPanel() {
 						{filteredEmployees.map((emp) => {
 							const active = emp.employee === selectedEmployeeName;
 							const feedback = feedbackByEmployee[emp.employee];
-							const riskScore = Number(feedback?.risk_score ?? 0);
+							const isTosExempt = tosExemptUsers.has((emp.employee || "").toLowerCase().trim());
+							const riskScore = isTosExempt ? 0 : Number(feedback?.risk_score ?? 0);
 							return (
 								<button
 									key={emp.employee}
@@ -1453,6 +1465,7 @@ function ChatterFeedbackPanel() {
 					{selectedEmployee && (() => {
 						const feedback = feedbackByEmployee[selectedEmployee.employee];
 						const isLoading = loadingEmployee === selectedEmployee.employee;
+						const isTosExempt = tosExemptUsers.has((selectedEmployee.employee || "").toLowerCase().trim());
 						return (
 							<Card className="chatter-panel">
 								<CardHeader>
@@ -1475,7 +1488,7 @@ function ChatterFeedbackPanel() {
 											)}
 
 											<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-												{renderScore("Risk", feedback?.risk_score)}
+												{renderScore("Risk", isTosExempt ? 0 : feedback?.risk_score)}
 												{renderScore("Greedy", feedback?.greedy_score)}
 												{renderScore("Fantasy", feedback?.fantasy_score)}
 											</div>
@@ -1504,13 +1517,19 @@ function ChatterFeedbackPanel() {
 											<div className="space-y-2">
 												<Label>TOS Risk Checks</Label>
 												<div className="flex flex-wrap gap-2">
-													{(feedback?.tos_flags || []).map((flag) => (
-														<Badge key={flag} variant="secondary">
-															{flag}
-														</Badge>
-													))}
-													{(feedback?.tos_flags || []).length === 0 && (
+													{isTosExempt ? (
 														<span className="text-sm text-slate-400">No risk flags detected.</span>
+													) : (
+														<>
+															{(feedback?.tos_flags || []).map((flag) => (
+																<Badge key={flag} variant="secondary">
+																	{flag}
+																</Badge>
+															))}
+															{(feedback?.tos_flags || []).length === 0 && (
+																<span className="text-sm text-slate-400">No risk flags detected.</span>
+															)}
+														</>
 													)}
 												</div>
 											</div>
