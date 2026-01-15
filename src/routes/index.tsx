@@ -1350,7 +1350,7 @@ function UserApprovalsPanel() {
 								<p className="text-slate-100 font-medium">{user.name}</p>
 								<p className="text-sm text-slate-400">{user.email}</p>
 								<p className="text-xs text-slate-500">
-									Role: {user.role || DEFAULT_ROLE} | Inflow: {user.inflow_username || "ƒ?""}
+									Role: {user.role || DEFAULT_ROLE} | Inflow: {user.inflow_username || "N/A"}
 								</p>
 							</div>
 							<div className="flex gap-2">
