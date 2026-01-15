@@ -4163,6 +4163,22 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 															Bulze share (1% of assigned chatters{calendarMonth ? `, ${format(calendarMonth, "MMM yyyy")}` : ""})
 														</span>
 														<div className="flex items-center gap-2">
+															<Button
+																variant="outline"
+																size="sm"
+																onClick={() => calendarMonth && setCalendarMonth(subMonths(calendarMonth, 1))}
+																disabled={!calendarMonth}
+															>
+																Prev
+															</Button>
+															<Button
+																variant="outline"
+																size="sm"
+																onClick={() => calendarMonth && setCalendarMonth(addMonths(calendarMonth, 1))}
+																disabled={!calendarMonth}
+															>
+																Next
+															</Button>
 															<span className="text-slate-100 font-semibold tabular-nums">
 																{formatCurrency(bulzeMonthlyTotal)}
 															</span>
