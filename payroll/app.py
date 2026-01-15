@@ -45,6 +45,81 @@ CHAT_PRICE_HEADER = "Price"
 CHAT_PURCHASED_HEADER = "Purchased"
 CHAT_SENT_TO_HEADER = "Sent to"
 
+FANTASY_KEYWORDS = {
+    "babe",
+    "baby",
+    "darling",
+    "daddy",
+    "girlfriend",
+    "boyfriend",
+    "love",
+    "sweetheart",
+    "kiss",
+    "cuddle",
+    "date",
+    "dream",
+    "fantasy",
+    "goodnight",
+    "good night",
+    "wife",
+    "husband",
+}
+
+GREEDY_KEYWORDS = {
+    "tip",
+    "unlock",
+    "pay",
+    "price",
+    "menu",
+    "bundle",
+    "offer",
+    "sale",
+    "promo",
+    "ppv",
+    "custom",
+    "buy",
+}
+
+TOS_RISK_PATTERNS = {
+    "Potential off-platform or meetup language": [
+        "snap",
+        "snapchat",
+        "whatsapp",
+        "telegram",
+        "kik",
+        "discord",
+        "meet",
+        "meetup",
+        "irl",
+        "real life",
+        "hotel",
+        "address",
+        "cashapp",
+        "venmo",
+        "paypal",
+        "zelle",
+    ],
+    "Potential age or minor references": [
+        "teen",
+        "underage",
+        "minor",
+        "schoolgirl",
+        "barely legal",
+        "young girl",
+        "young boy",
+        "17",
+        "16",
+        "15",
+    ],
+    "Potential illegal or coercive references": [
+        "rape",
+        "forced",
+        "drug",
+        "drugs",
+        "coke",
+        "meth",
+    ],
+}
 
 app = Flask(__name__)
 load_dotenv()
@@ -235,6 +310,174 @@ def normalize_text(value):
     s = s.lower()
     s = re.sub(r"\s+", " ", s).strip()
     return s
+
+
+def extract_chat_messages(chat):
+    messages = []
+    if not chat:
+        return messages
+    for item in chat.get("top_sentences", []) or []:
+        text = item.get("text")
+        if text:
+            messages.append(text)
+    for item in chat.get("top_baits", []) or []:
+        text = item.get("text")
+        if text:
+            messages.append(text)
+    return messages
+
+
+def detect_tos_flags(messages):
+    normalized = [normalize_text(m) for m in messages if m]
+    flags = []
+    for label, keywords in TOS_RISK_PATTERNS.items():
+        for text in normalized:
+            if any(keyword in text for keyword in keywords):
+                flags.append(label)
+                break
+    return flags
+
+
+def score_keywords(messages, keywords):
+    total = 0
+    hits = 0
+    for message in messages:
+        words = normalize_text(message).split()
+        total += len(words)
+        hits += sum(1 for word in words if word in keywords)
+    if total <= 0:
+        return 0
+    ratio = hits / total
+    return max(0, min(100, int(ratio * 500)))
+
+
+def build_fallback_chat_feedback(emp, tos_flags):
+    chat = emp.get("chat") or {}
+    messages = extract_chat_messages(chat)
+    greedy_score = score_keywords(messages, GREEDY_KEYWORDS)
+    fantasy_score = score_keywords(messages, FANTASY_KEYWORDS)
+    risk_score = min(100, len(tos_flags) * 30)
+
+    paid_offers = chat.get("paid_offers") or 0
+    messages_sent = chat.get("messages_sent") or 0
+    offer_rate = paid_offers / messages_sent if messages_sent else 0
+    greedy_score = max(greedy_score, min(100, int(offer_rate * 400)))
+
+    summary = "Feedback is based on chat metrics and top message samples."
+    strengths = []
+    improvements = []
+
+    if fantasy_score >= 30:
+        strengths.append("Strong fantasy or relationship framing in message copy.")
+    if chat.get("conversion_rate") and chat.get("conversion_rate") >= 0.1:
+        strengths.append("Healthy conversion rate on paid offers.")
+    if not strengths:
+        strengths.append("Consistent activity in recent chat logs.")
+
+    if greedy_score >= 60:
+        improvements.append("Balance sales asks with more relationship or fantasy copy.")
+    if chat.get("reply_time_avg") and chat.get("reply_time_avg") > 10:
+        improvements.append("Reply time is slower than top performers; faster replies convert better.")
+    if not improvements:
+        improvements.append("Keep testing new hooks while preserving your best baits.")
+
+    return {
+        "summary": summary,
+        "strengths": strengths,
+        "improvements": improvements,
+        "tos_flags": tos_flags,
+        "risk_score": risk_score,
+        "greedy_score": greedy_score,
+        "fantasy_score": fantasy_score,
+    }
+
+
+def build_ai_chat_feedback(emp, top_peers, ai_enabled=True):
+    chat = emp.get("chat")
+    if not chat:
+        return None
+
+    messages = extract_chat_messages(chat)
+    tos_flags = detect_tos_flags(messages)
+
+    if not ai_enabled or not GROK_API_KEY:
+        return build_fallback_chat_feedback(emp, tos_flags)
+
+    peer_payload = []
+    for peer in top_peers or []:
+        peer_payload.append(
+            {
+                "name": peer.get("employee") or peer.get("name"),
+                "sales": peer.get("sales"),
+                "conversion_rate": (peer.get("chat") or {}).get("conversion_rate"),
+                "top_baits": [x.get("text") for x in (peer.get("chat") or {}).get("top_baits", [])],
+                "top_sentences": [x.get("text") for x in (peer.get("chat") or {}).get("top_sentences", [])],
+            }
+        )
+
+    payload = {
+        "model": GROK_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a supportive performance coach for an OnlyFans chatter team. "
+                    "Analyze the chatter's messages and metrics compared to top performers. "
+                    "Return ONLY valid JSON with keys: summary (string), strengths (array), improvements (array), "
+                    "risk_score (0-100), greedy_score (0-100), fantasy_score (0-100), tos_flags (array). "
+                    "Keep wording constructive and non-judgmental."
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "chatter": emp,
+                        "top_peers": peer_payload,
+                        "tos_flags_detected": tos_flags,
+                        "message_samples": messages[:20],
+                    }
+                ),
+            },
+        ],
+        "temperature": 0.2,
+        "max_tokens": 350,
+    }
+
+    try:
+        response = requests.post(
+            build_grok_url(),
+            headers={"Authorization": f"Bearer {GROK_API_KEY}"},
+            json=payload,
+            timeout=25,
+        )
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+        parsed = parse_json_object(content) or {}
+        strengths = parsed.get("strengths") if isinstance(parsed.get("strengths"), list) else []
+        improvements = parsed.get("improvements") if isinstance(parsed.get("improvements"), list) else []
+        summary = parsed.get("summary") if isinstance(parsed.get("summary"), str) else ""
+        tos_flags_resp = parsed.get("tos_flags") if isinstance(parsed.get("tos_flags"), list) else []
+        risk_score = int(parsed.get("risk_score") or 0)
+        greedy_score = int(parsed.get("greedy_score") or 0)
+        fantasy_score = int(parsed.get("fantasy_score") or 0)
+
+        merged_flags = []
+        for item in tos_flags + tos_flags_resp:
+            if isinstance(item, str) and item not in merged_flags:
+                merged_flags.append(item)
+
+        return {
+            "summary": summary or "Feedback generated from chat samples and metrics.",
+            "strengths": strengths,
+            "improvements": improvements,
+            "tos_flags": merged_flags,
+            "risk_score": max(0, min(100, risk_score)),
+            "greedy_score": max(0, min(100, greedy_score)),
+            "fantasy_score": max(0, min(100, fantasy_score)),
+        }
+    except Exception:
+        return build_fallback_chat_feedback(emp, tos_flags)
 
 
 def build_insights(stats):
@@ -1118,6 +1361,25 @@ Employee stats JSON:
         return jsonify({"strengths": strengths, "improvements": improvements, "next_steps": next_steps})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/chat-feedback", methods=["POST"])
+def chat_feedback():
+    payload = request.get_json(silent=True) or {}
+    employee = payload.get("employee") or payload.get("chatter")
+    top_peers = payload.get("top_peers") or []
+    ai_enabled = payload.get("ai_enabled")
+    if ai_enabled is None:
+        ai_enabled = True
+
+    if not employee:
+        return jsonify({"error": "Missing employee"}), 400
+
+    feedback = build_ai_chat_feedback(employee, top_peers, ai_enabled)
+    if not feedback:
+        return jsonify({"error": "Missing chat data for employee"}), 400
+
+    return jsonify(feedback)
 
 
 @app.route("/api/compare", methods=["POST"])

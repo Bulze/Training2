@@ -149,6 +149,17 @@ type PayrollEmployeeFeedback = {
 	error?: string;
 };
 
+type ChatFeedback = {
+	summary?: string;
+	strengths?: string[];
+	improvements?: string[];
+	tos_flags?: string[];
+	risk_score?: number;
+	greedy_score?: number;
+	fantasy_score?: number;
+	error?: string;
+};
+
 type ChatterAdminMeta = {
 	manual_bonus?: number;
 	bonus_entries?: Array<{
@@ -605,6 +616,7 @@ function ManagementPanel() {
 
 				<div className="min-w-0">
 					<TabsContent value="users" className="mt-0">
+						<ChatterFeedbackPanel />
 						<UserApprovalsPanel />
 					</TabsContent>
 					<TabsContent value="payroll" className="mt-0">
@@ -1223,6 +1235,291 @@ function ManageTestsPanel() {
 						);
 					})}
 					{videos.length === 0 && <p className="text-center text-slate-500 py-8">No tests available</p>}
+				</div>
+			</CardContent>
+		</Card>
+	);
+}
+
+function ChatterFeedbackPanel() {
+	const { data: payrollSnapshot } = useQuery({
+		queryKey: ["payrollSnapshot"],
+		queryFn: fetchPayrollSnapshot,
+	});
+	const employees = payrollSnapshot?.snapshot?.employees ?? [];
+	const chatEmployees = useMemo(
+		() =>
+			employees.filter((emp) => {
+				const chat = emp.chat || {};
+				return (chat.top_sentences?.length || 0) > 0 || (chat.top_baits?.length || 0) > 0;
+			}),
+		[employees],
+	);
+
+	const [selectedEmployeeName, setSelectedEmployeeName] = useState<string | null>(null);
+	const [search, setSearch] = useState("");
+	const [feedbackByEmployee, setFeedbackByEmployee] = useState<Record<string, ChatFeedback>>({});
+	const [loadingEmployee, setLoadingEmployee] = useState<string | null>(null);
+
+	useEffect(() => {
+		if (selectedEmployeeName || chatEmployees.length === 0) return;
+		setSelectedEmployeeName(chatEmployees[0].employee);
+	}, [selectedEmployeeName, chatEmployees]);
+
+	const filteredEmployees = useMemo(() => {
+		const q = search.trim().toLowerCase();
+		if (!q) return chatEmployees;
+		return chatEmployees.filter((emp) => (emp.employee || "").toLowerCase().includes(q));
+	}, [chatEmployees, search]);
+
+	const topPeers = useMemo(() => {
+		return [...chatEmployees]
+			.sort((a, b) => Number(b.sales || 0) - Number(a.sales || 0))
+			.slice(0, 3);
+	}, [chatEmployees]);
+
+	const selectedEmployee = selectedEmployeeName
+		? chatEmployees.find((emp) => emp.employee === selectedEmployeeName) ?? null
+		: null;
+
+	const summarizeText = (text: string, limit = 160) => {
+		const compact = (text || "").replace(/\s+/g, " ").trim();
+		if (compact.length <= limit) return compact;
+		return `${compact.slice(0, limit)}...`;
+	};
+
+	const readJsonResponse = async <T,>(response: Response) => {
+		const contentType = response.headers.get("content-type") || "";
+		if (!contentType.includes("application/json")) {
+			const text = await response.text();
+			return { ok: false as const, status: response.status, text };
+		}
+		try {
+			const json = (await response.json()) as T;
+			return { ok: true as const, status: response.status, json };
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "Invalid JSON response";
+			return { ok: false as const, status: response.status, text: message };
+		}
+	};
+
+	useEffect(() => {
+		if (!selectedEmployee) return;
+		if (feedbackByEmployee[selectedEmployee.employee]) return;
+
+		let cancelled = false;
+		const run = async () => {
+			setLoadingEmployee(selectedEmployee.employee);
+			try {
+				const response = await fetch(`${PAYROLL_API_BASE}/api/chat-feedback`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						employee: selectedEmployee,
+						top_peers: topPeers,
+						ai_enabled: true,
+					}),
+				});
+				const parsed = await readJsonResponse<ChatFeedback & { error?: string }>(response);
+				if (!parsed.ok) {
+					if (cancelled) return;
+					setFeedbackByEmployee((prev) => ({
+						...prev,
+						[selectedEmployee.employee]: { error: summarizeText(parsed.text) },
+					}));
+					return;
+				}
+				if (!response.ok) {
+					if (cancelled) return;
+					setFeedbackByEmployee((prev) => ({
+						...prev,
+						[selectedEmployee.employee]: {
+							error: summarizeText(parsed.json.error || "Failed to generate feedback."),
+						},
+					}));
+					return;
+				}
+				if (cancelled) return;
+				setFeedbackByEmployee((prev) => ({
+					...prev,
+					[selectedEmployee.employee]: parsed.json,
+				}));
+			} catch (error) {
+				if (cancelled) return;
+				setFeedbackByEmployee((prev) => ({
+					...prev,
+					[selectedEmployee.employee]: {
+						error: error instanceof Error ? error.message : "Request failed",
+					},
+				}));
+			} finally {
+				if (!cancelled) setLoadingEmployee(null);
+			}
+		};
+
+		run();
+		return () => {
+			cancelled = true;
+		};
+	}, [PAYROLL_API_BASE, feedbackByEmployee, selectedEmployee, topPeers]);
+
+	const renderScore = (label: string, value?: number) => {
+		const safeValue = Number.isFinite(Number(value)) ? Number(value) : 0;
+		return (
+			<div className="space-y-1">
+				<div className="flex items-center justify-between text-sm text-slate-300">
+					<span>{label}</span>
+					<span className="text-slate-200 font-medium">{safeValue}/100</span>
+				</div>
+				<Progress value={safeValue} />
+			</div>
+		);
+	};
+
+	if (!payrollSnapshot?.snapshot) {
+		return (
+			<Card className="chatter-panel mb-6">
+				<CardHeader>
+					<CardTitle className="text-slate-100">Feedback</CardTitle>
+					<CardDescription className="text-slate-400">
+						Upload the payroll Excel and chat report to generate chatter feedback.
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="text-sm text-slate-400">
+					No payroll snapshot found. Upload the Excel files in Payroll to continue.
+				</CardContent>
+			</Card>
+		);
+	}
+
+	return (
+		<Card className="chatter-panel mb-6">
+			<CardHeader>
+				<CardTitle className="text-slate-100">Feedback</CardTitle>
+				<CardDescription className="text-slate-400">
+					AI feedback from chat message reports (Message Dashboard export).
+				</CardDescription>
+			</CardHeader>
+			<CardContent className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
+				<div className="space-y-3">
+					<Input
+						value={search}
+						onChange={(e) => setSearch(e.target.value)}
+						placeholder="Search chatter..."
+					/>
+					<div className="border border-slate-700 rounded-lg chatter-panel divide-y divide-slate-700 overflow-hidden">
+						{filteredEmployees.map((emp) => {
+							const active = emp.employee === selectedEmployeeName;
+							const feedback = feedbackByEmployee[emp.employee];
+							const riskScore = Number(feedback?.risk_score ?? 0);
+							return (
+								<button
+									key={emp.employee}
+									type="button"
+									onClick={() => setSelectedEmployeeName(emp.employee)}
+									className={cn(
+										"w-full text-left px-4 py-3 hover:bg-slate-800/60 transition flex items-center justify-between gap-3",
+										active && "bg-slate-800/70",
+									)}
+								>
+									<div className="min-w-0">
+										<p className="text-slate-100 font-medium truncate">{emp.employee}</p>
+										<p className="text-xs text-slate-400 truncate">
+											Sales ${Number(emp.sales || 0).toFixed(0)}
+										</p>
+									</div>
+									<Badge variant="outline" className="border-slate-700 text-slate-200">
+										Risk {Number.isFinite(riskScore) ? riskScore : 0}
+									</Badge>
+								</button>
+							);
+						})}
+						{chatEmployees.length === 0 && (
+							<div className="px-4 py-6 text-center text-slate-500">
+								No chat data found. Upload the Message Dashboard report in Payroll.
+							</div>
+						)}
+						{chatEmployees.length > 0 && filteredEmployees.length === 0 && (
+							<div className="px-4 py-6 text-center text-slate-500">No chatters match your search.</div>
+						)}
+					</div>
+				</div>
+
+				<div className="min-w-0">
+					{!selectedEmployee && (
+						<div className="text-slate-400 text-sm">Select a chatter to view feedback.</div>
+					)}
+
+					{selectedEmployee && (() => {
+						const feedback = feedbackByEmployee[selectedEmployee.employee];
+						const isLoading = loadingEmployee === selectedEmployee.employee;
+						return (
+							<Card className="chatter-panel">
+								<CardHeader>
+									<CardTitle className="text-slate-100">{selectedEmployee.employee}</CardTitle>
+									<CardDescription className="text-slate-400">
+										{isLoading ? "Generating feedback..." : "Chat performance overview"}
+									</CardDescription>
+								</CardHeader>
+								<CardContent className="space-y-6">
+									{feedback?.error && (
+										<Alert variant="destructive">
+											<AlertDescription>{feedback.error}</AlertDescription>
+										</Alert>
+									)}
+
+									{!feedback?.error && (
+										<>
+											{feedback?.summary && (
+												<p className="text-slate-200">{feedback.summary}</p>
+											)}
+
+											<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+												{renderScore("Risk", feedback?.risk_score)}
+												{renderScore("Greedy", feedback?.greedy_score)}
+												{renderScore("Fantasy", feedback?.fantasy_score)}
+											</div>
+
+											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+												<div className="space-y-2">
+													<Label>Strengths</Label>
+													<ul className="text-sm text-slate-300 list-disc pl-4 space-y-1">
+														{(feedback?.strengths || []).map((item) => (
+															<li key={item}>{item}</li>
+														))}
+														{(feedback?.strengths || []).length === 0 && <li>-</li>}
+													</ul>
+												</div>
+												<div className="space-y-2">
+													<Label>Improvements</Label>
+													<ul className="text-sm text-slate-300 list-disc pl-4 space-y-1">
+														{(feedback?.improvements || []).map((item) => (
+															<li key={item}>{item}</li>
+														))}
+														{(feedback?.improvements || []).length === 0 && <li>-</li>}
+													</ul>
+												</div>
+											</div>
+
+											<div className="space-y-2">
+												<Label>TOS Risk Checks</Label>
+												<div className="flex flex-wrap gap-2">
+													{(feedback?.tos_flags || []).map((flag) => (
+														<Badge key={flag} variant="secondary">
+															{flag}
+														</Badge>
+													))}
+													{(feedback?.tos_flags || []).length === 0 && (
+														<span className="text-sm text-slate-400">No risk flags detected.</span>
+													)}
+												</div>
+											</div>
+										</>
+									)}
+								</CardContent>
+							</Card>
+						);
+					})()}
 				</div>
 			</CardContent>
 		</Card>
@@ -4830,13 +5127,13 @@ function CompletionScreen({
 								</AlertDescription>
 							</Alert>
 							<div className="text-sm text-slate-600">
-								<div className="font-medium">Ocena: {completion.score}/{totalQuestions}</div>
+								<div className="font-medium">Score: {completion.score}/{totalQuestions}</div>
 								{belowAverage ? (
 									<div className="text-amber-600">
-										Prosao si, ali rezultat je ispod proseka. Preporucujemo da ponovo pogledas video.
+										You passed, but there is room to grow. Consider rewatching the video to strengthen your score.
 									</div>
 								) : (
-									<div className="text-green-600">Dobar rezultat. Mozes da nastavis dalje.</div>
+									<div className="text-green-600">Great work. You are ready to move forward.</div>
 								)}
 							</div>
 						</div>
