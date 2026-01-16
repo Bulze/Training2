@@ -1708,21 +1708,11 @@ function PayrollPanel() {
 	const [detailPercent, setDetailPercent] = useState("");
 	const [ppvDay, setPpvDay] = useState<PayrollPpvDay>({});
 	const [activeTab, setActiveTab] = useState<"detail" | "ppv">("detail");
-	const [compareA, setCompareA] = useState("");
-	const [compareB, setCompareB] = useState("");
 	const [employeeSearch, setEmployeeSearch] = useState("");
 	const [showAllEmployees, setShowAllEmployees] = useState(false);
-	const [compareSummary, setCompareSummary] = useState<{
-		why_a_wins?: string[];
-		why_b_lags?: string[];
-		ppv_recommendations?: string[];
-		bait_recommendations?: string[];
-	} | null>(null);
 	const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 	const [aiStatus, setAiStatus] = useState<string | null>(null);
 	const [isAnalyzing, setIsAnalyzing] = useState(false);
-	const [employeeFeedback, setEmployeeFeedback] = useState<Record<string, PayrollEmployeeFeedback>>({});
-	const [employeeFeedbackLoading, setEmployeeFeedbackLoading] = useState(false);
 	const [percentOverrides, setPercentOverrides] = useState<Record<string, number>>({});
 	const [selectedCutIndex, setSelectedCutIndex] = useState<number | null>(null);
 	const usersOrm = UsersORM.getInstance();
@@ -1815,16 +1805,6 @@ function PayrollPanel() {
 		const updatedIso = await savePayrollSnapshot(snapshot);
 		setUpdatedAt(updatedIso);
 	};
-
-	useEffect(() => {
-		if (!employees.length) {
-			setCompareA("");
-			setCompareB("");
-			return;
-		}
-		setCompareA((prev) => prev || employees[0].employee);
-		setCompareB((prev) => prev || employees[Math.min(1, employees.length - 1)].employee);
-	}, [employees]);
 
 	const computeShiftBonus = (value: number) => {
 		if (!Number.isFinite(value) || value <= 0) return 0;
@@ -2170,12 +2150,68 @@ function PayrollPanel() {
 		return computedEmployees.find((emp) => emp.employee === selectedEmployeeName) || null;
 	}, [computedEmployees, selectedEmployeeName]);
 
-	const chartData = useMemo(() => {
-		const daily = selectedEmployee?.daily_sales || {};
-		return Object.keys(daily)
-			.sort()
-			.map((date) => ({ date, sales: Number(daily[date] ?? 0) }));
-	}, [selectedEmployee]);
+	const selectedCutLabel = useMemo(() => {
+		if (!selectedPeriod) return "No cut selected";
+		return `Cut ${format(selectedPeriod.start, "MMM d, yyyy")} to ${format(subDays(selectedPeriod.endExclusive, 1), "MMM d, yyyy")}`;
+	}, [selectedPeriod]);
+
+	const selectedEmployeeDaily = useMemo(() => {
+		if (!selectedEmployee || !selectedPeriod) return [];
+		const stats = statsByEmployee.get(selectedEmployee.employee);
+		if (!stats) return [];
+		const entries: Array<{ date: Date; dateKey: string; sales: number; bonus: number; earned: number }> = [];
+		for (const [dateKey, sales] of stats.salesMap.entries()) {
+			let date: Date | null = null;
+			try {
+				date = parseISO(dateKey);
+			} catch {
+				date = null;
+			}
+			if (!date || date < selectedPeriod.start || date >= selectedPeriod.endExclusive) continue;
+			const bonus = stats.bonusMap.get(dateKey) ?? 0;
+			const earned = Number(sales || 0) * Number(selectedEmployee.percent ?? 0) + Number(bonus || 0);
+			entries.push({ date, dateKey, sales, bonus, earned });
+		}
+		entries.sort((a, b) => a.date.getTime() - b.date.getTime());
+		return entries;
+	}, [selectedEmployee, selectedPeriod, statsByEmployee]);
+
+	const bulzeCutShareTotal = useMemo(() => {
+		if (!selectedPeriod) return 0;
+		const monthStartCandidate = startOfMonth(selectedPeriod.endExclusive);
+		if (monthStartCandidate <= selectedPeriod.start || monthStartCandidate >= selectedPeriod.endExclusive) {
+			return 0;
+		}
+		const prevMonthStart = startOfMonth(subMonths(monthStartCandidate, 1));
+		const prevMonthKey = format(prevMonthStart, "yyyy-MM");
+		return bulzeShareByMonth.get(prevMonthKey) ?? 0;
+	}, [selectedPeriod, bulzeShareByMonth]);
+
+	const bulzeCutShareDetails = useMemo(() => {
+		if (!selectedPeriod || bulzeAssignedUsers.length === 0) return [];
+		const monthStartCandidate = startOfMonth(selectedPeriod.endExclusive);
+		if (monthStartCandidate <= selectedPeriod.start || monthStartCandidate >= selectedPeriod.endExclusive) {
+			return [];
+		}
+		const prevMonthStart = startOfMonth(subMonths(monthStartCandidate, 1));
+		const prevMonthKey = format(prevMonthStart, "yyyy-MM");
+		const results = bulzeAssignedUsers.map(({ user: rowUser }) => {
+			const inflowName = normalizeName(rowUser.inflow_username);
+			const name = normalizeName(rowUser.name);
+			const employeeMatch = (inflowName && payrollByName.get(inflowName))
+				|| (name && payrollByName.get(name))
+				|| null;
+			const monthlySales = employeeMatch
+				? statsByEmployee.get(employeeMatch.employee)?.monthlySalesMap.get(prevMonthKey) ?? 0
+				: 0;
+			return {
+				user: rowUser,
+				monthlySales,
+				share: monthlySales * 0.01,
+			};
+		});
+		return results.filter((row) => row.monthlySales > 0).sort((a, b) => b.monthlySales - a.monthlySales);
+	}, [selectedPeriod, bulzeAssignedUsers, payrollByName, statsByEmployee]);
 
 	useEffect(() => {
 		if (!selectedEmployee) return;
@@ -2188,30 +2224,6 @@ function PayrollPanel() {
 		if (!Number.isFinite(amount)) return "$0.00";
 		return `$${amount.toFixed(2)}`;
 	};
-	const formatMaybe = (value: unknown, suffix = "") => {
-		if (value === null || value === undefined) return "-";
-		const amount = typeof value === "number" ? value : Number(value);
-		if (!Number.isFinite(amount)) return "-";
-		return `${amount.toFixed(2)}${suffix}`;
-	};
-	const formatRank = (compare?: PayrollCompareMetric) => {
-		if (!compare) return "-";
-		const rank = Number(compare.rank);
-		const total = Number(compare.total);
-		if (!Number.isFinite(rank) || !Number.isFinite(total)) return "-";
-		const percentileRaw = compare.percentile;
-		const percentile = percentileRaw === undefined || percentileRaw === null ? null : Number(percentileRaw);
-		const pct = percentile === null || !Number.isFinite(percentile) ? "-" : `${percentile.toFixed(0)}%`;
-		return `#${rank}/${total} (${pct})`;
-	};
-
-	const renderList = (items?: string[]) => {
-		if (!items || !items.length) {
-			return <li>-</li>;
-		}
-		return items.map((item) => <li key={item}>{item}</li>);
-	};
-
 	const renderPpvList = (items?: PayrollPpvItem[]) => {
 		if (!items || !items.length) {
 			return <li>-</li>;
@@ -2314,8 +2326,6 @@ function PayrollPanel() {
 			setEmployees(preparedEmployees);
 			setPpvDay(data.ppv_day || {});
 			setAiStatus(data.ai_status || null);
-			setCompareSummary(null);
-			setEmployeeFeedback({});
 			setEmployeeSearch("");
 			setShowAllEmployees(false);
 			setDateFilterTouched(false);
@@ -2403,103 +2413,18 @@ function PayrollPanel() {
 		}
 	};
 
-	const handleCompare = async () => {
-		if (!compareA || !compareB) return;
-		const userA = employees.find((e) => e.employee === compareA);
-		const userB = employees.find((e) => e.employee === compareB);
-		if (!userA || !userB) return;
-
-		const payload = {
-			user_a: userA,
-			user_b: userB,
-			ai_enabled: aiEnabled,
-		};
-
-		setStatus("Comparing...");
-
-		try {
-			const response = await fetch(`${PAYROLL_API_BASE}/api/compare`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(payload),
-			});
-			const parsed = await readJsonResponse<{ summary?: Record<string, string[]>; error?: string }>(response);
-			if (!parsed.ok) {
-				setStatus(
-					`Compare failed (${parsed.status}): ${summarizeText(parsed.text)}. ${PAYROLL_API_HINT}`,
-				);
-				return;
-			}
-			const data = parsed.json;
-			if (!response.ok) {
-				setStatus(data.error || "Compare failed.");
-				return;
-			}
-			setCompareSummary(data.summary || {});
-			setStatus("Compare complete.");
-		} catch (error) {
-			setStatus(formatApiErrorMessage("Compare failed", error));
-		}
-	};
-
 	const clearSnapshot = () => {
 		clearPayrollSnapshot().catch(() => {});
 		setEmployees([]);
 		setSelectedEmployeeName(null);
 		setPpvDay({});
-		setCompareSummary(null);
 		setUpdatedAt(null);
 		setAiStatus(null);
-		setEmployeeFeedback({});
 		setEmployeeSearch("");
 		setShowAllEmployees(false);
 		setStatus("Cleared.");
 		setActiveTab("detail");
 	};
-
-	useEffect(() => {
-		if (!selectedEmployee || !aiEnabled) return;
-		if (employeeFeedback[selectedEmployee.employee]) return;
-
-		let cancelled = false;
-		const run = async () => {
-			setEmployeeFeedbackLoading(true);
-			try {
-				const response = await fetch(`${PAYROLL_API_BASE}/api/employee-feedback`, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ employee: selectedEmployee }),
-				});
-				const parsed = await readJsonResponse<PayrollEmployeeFeedback>(response);
-				if (!parsed.ok) {
-					if (cancelled) return;
-					setEmployeeFeedback((prev) => ({
-						...prev,
-						[selectedEmployee.employee]: { error: summarizeText(parsed.text) },
-					}));
-					return;
-				}
-				if (cancelled) return;
-				setEmployeeFeedback((prev) => ({
-					...prev,
-					[selectedEmployee.employee]: parsed.json,
-				}));
-			} catch (error) {
-				if (cancelled) return;
-				setEmployeeFeedback((prev) => ({
-					...prev,
-					[selectedEmployee.employee]: { error: error instanceof Error ? error.message : "Unknown error" },
-				}));
-			} finally {
-				if (!cancelled) setEmployeeFeedbackLoading(false);
-			}
-		};
-
-		run();
-		return () => {
-			cancelled = true;
-		};
-	}, [PAYROLL_API_BASE, aiEnabled, employeeFeedback, selectedEmployee]);
 
 	return (
 		<div className="payroll-app">
@@ -2694,6 +2619,15 @@ function PayrollPanel() {
 						>
 							{showAllEmployees ? "Show top 7" : `Show all users (${filteredEmployees.length})`}
 						</button>
+						<div className="text-xs text-slate-400">{selectedCutLabel}</div>
+						<button
+							type="button"
+							className="btn ghost"
+							onClick={() => setSelectedCutIndex((prev) => (prev === null ? prev : Math.max(0, prev - 1)))}
+							disabled={selectedCutIndex === null || selectedCutIndex <= 0}
+						>
+							Prev cut
+						</button>
 					</div>
 					<table>
 						<thead>
@@ -2747,178 +2681,65 @@ function PayrollPanel() {
 							Apply
 						</button>
 					</div>
-					<div className="stats">
-						<div>
-							<span>Clocked hours</span>
-							<strong>{formatMaybe(selectedEmployee?.clocked_hours, "h")}</strong>
-						</div>
-						<div>
-							<span>Scheduled hours</span>
-							<strong>{formatMaybe(selectedEmployee?.scheduled_hours, "h")}</strong>
-						</div>
-						<div>
-							<span>Sales/hr</span>
-							<strong>{formatMaybe(selectedEmployee?.sales_per_hour, "$")}</strong>
-						</div>
-						<div>
-							<span>Messages/hr</span>
-							<strong>{formatMaybe(selectedEmployee?.messages_per_hour)}</strong>
-						</div>
-						<div>
-							<span>Fans/hr</span>
-							<strong>{formatMaybe(selectedEmployee?.fans_per_hour)}</strong>
-						</div>
-						<div>
-							<span>Response (clocked)</span>
-							<strong>{formatMaybe(selectedEmployee?.response_clock_avg, "m")}</strong>
-						</div>
-					</div>
-					<div className="chart-card">
-						{chartData.length > 0 ? (
-							<ResponsiveContainer width="100%" height={180}>
-								<LineChart data={chartData}>
-									<CartesianGrid stroke="rgba(31,42,68,0.4)" />
-									<XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 11 }} />
-									<YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
-									<Tooltip
-										contentStyle={{
-											background: "#0f172a",
-											border: "1px solid #1f2a44",
-											borderRadius: "10px",
-											color: "#e5e7eb",
-										}}
-									/>
-									<Line
-										type="monotone"
-										dataKey="sales"
-										stroke="#22d3ee"
-										strokeWidth={2}
-										dot={false}
-										fill="rgba(34, 211, 238, 0.2)"
-									/>
-								</LineChart>
-							</ResponsiveContainer>
-						) : (
-							<div className="text-sm text-slate-400">No chart data</div>
-						)}
-					</div>
-					<div className="compare">
-						<h3>Chatter comparison</h3>
-						<div className="compare-grid">
-							<div>
-								<span>Sales rank</span>
-								<strong>{formatRank(selectedEmployee?.compare?.sales)}</strong>
-							</div>
-							<div>
-								<span>Sales/hr rank</span>
-								<strong>{formatRank(selectedEmployee?.compare?.sales_per_hour)}</strong>
-							</div>
-							<div>
-								<span>Msgs/hr rank</span>
-								<strong>{formatRank(selectedEmployee?.compare?.messages_per_hour)}</strong>
-							</div>
-							<div>
-								<span>Reply time rank</span>
-								<strong>{formatRank(selectedEmployee?.compare?.response_clock_avg)}</strong>
-							</div>
-							<div>
-								<span>Paid offers rank</span>
-								<strong>{formatRank(selectedEmployee?.compare?.chat_paid_offers)}</strong>
-							</div>
-							<div>
-								<span>Chat CVR rank</span>
-								<strong>{formatRank(selectedEmployee?.compare?.chat_conversion_rate)}</strong>
-							</div>
-						</div>
-					</div>
-					<div className="chat-analysis">
-						<div className="chat-columns">
-							<div>
-								<h4>Why they make money</h4>
-								<ul>{renderList(selectedEmployee?.chat_ai?.why_money)}</ul>
-								<h4>How they make money</h4>
-								<ul>{renderList(selectedEmployee?.chat_ai?.how_money)}</ul>
-								<h4>AI PPV suggestions</h4>
-								<ul>{renderList(selectedEmployee?.chat_ai?.ppv_suggestions)}</ul>
-								<h4>AI bait suggestions</h4>
-								<ul>{renderList(selectedEmployee?.chat_ai?.bait_suggestions)}</ul>
-							</div>
-							<div>
-								<h4>Most used sentences</h4>
-								<ul>{renderList(selectedEmployee?.chat?.top_sentences?.map((x) => x.text))}</ul>
-								<h4>Most used baits</h4>
-								<ul>{renderList(selectedEmployee?.chat?.top_baits?.map((x) => x.text))}</ul>
-							</div>
-						</div>
-					</div>
-					<div className="compare-panel">
-						<h3>Compare two chatters</h3>
-						<div className="compare-selects">
-							<div>
-								<label>User A</label>
-								<select value={compareA} onChange={(e) => setCompareA(e.target.value)}>
-									{employees.map((emp) => (
-										<option key={`a-${emp.employee}`} value={emp.employee}>
-											{emp.employee}
-										</option>
+					{selectedEmployeeDaily.length > 0 ? (
+						<div className="chart-card">
+							<h3 className="text-slate-200 text-sm mb-3">Daily earnings ({selectedCutLabel})</h3>
+							<table className="w-full text-sm">
+								<thead>
+									<tr className="text-left text-slate-400">
+										<th className="pb-2">Date</th>
+										<th className="pb-2 text-right">Sales</th>
+										<th className="pb-2 text-right">Bonus</th>
+										<th className="pb-2 text-right">Earned</th>
+									</tr>
+								</thead>
+								<tbody className="text-slate-200">
+									{selectedEmployeeDaily.map((row) => (
+										<tr key={row.dateKey} className="border-t border-slate-700/60">
+											<td className="py-2">{row.dateKey}</td>
+											<td className="py-2 text-right">{formatMoney(row.sales)}</td>
+											<td className="py-2 text-right">{formatMoney(row.bonus)}</td>
+											<td className="py-2 text-right text-emerald-300">{formatMoney(row.earned)}</td>
+										</tr>
 									))}
-								</select>
-							</div>
-							<div>
-								<label>User B</label>
-								<select value={compareB} onChange={(e) => setCompareB(e.target.value)}>
-									{employees.map((emp) => (
-										<option key={`b-${emp.employee}`} value={emp.employee}>
-											{emp.employee}
-										</option>
-									))}
-								</select>
-							</div>
-							<button type="button" className="btn accent" onClick={handleCompare}>
-								Compare
-							</button>
+								</tbody>
+							</table>
 						</div>
-						<div className="compare-results">
-							<h4>Why A makes more</h4>
-							<ul>{renderList(compareSummary?.why_a_wins)}</ul>
-							<h4>Why B makes less</h4>
-							<ul>{renderList(compareSummary?.why_b_lags)}</ul>
-							<h4>PPV recommendations for B</h4>
-							<ul>{renderList(compareSummary?.ppv_recommendations)}</ul>
-							<h4>Bait recommendations for B</h4>
-							<ul>{renderList(compareSummary?.bait_recommendations)}</ul>
-						</div>
-					</div>
-					<div className="insights">
-						<h3>AI Feedback</h3>
-						<ul>{renderList(selectedEmployee?.insights)}</ul>
-					</div>
-					{selectedEmployee && (
-						<div className="insights">
-							<h3>AI Coach</h3>
-							{!aiEnabled ? (
-								<p className="text-sm text-slate-400">Enable AI Insights to load coaching feedback.</p>
-							) : employeeFeedbackLoading ? (
-								<p className="text-sm text-slate-400">Loading coach feedback…</p>
-							) : employeeFeedback[selectedEmployee.employee]?.error ? (
-								<p className="text-sm text-rose-300">
-									Coach failed: {employeeFeedback[selectedEmployee.employee]?.error}
-								</p>
+					) : (
+						<div className="text-sm text-slate-400">No daily data for this cut.</div>
+					)}
+					{selectedEmployee && normalizeName(selectedEmployee.employee) === "bulze" && (
+						<div className="chart-card">
+							<h3 className="text-slate-200 text-sm mb-3">Bulze 1% share ({selectedCutLabel})</h3>
+							<div className="flex items-center justify-between text-sm mb-3">
+								<span className="text-slate-400">Total share paid in this cut</span>
+								<span className="text-emerald-300 font-semibold tabular-nums">
+									{formatMoney(bulzeCutShareTotal)}
+								</span>
+							</div>
+							{bulzeCutShareDetails.length > 0 ? (
+								<table className="w-full text-sm">
+									<thead>
+										<tr className="text-left text-slate-400">
+											<th className="pb-2">Chatter</th>
+											<th className="pb-2">Inflow</th>
+											<th className="pb-2 text-right">Prev month sales</th>
+											<th className="pb-2 text-right">Bulze 1%</th>
+										</tr>
+									</thead>
+									<tbody className="text-slate-200">
+										{bulzeCutShareDetails.map((entry) => (
+											<tr key={entry.user.id} className="border-t border-slate-700/60">
+												<td className="py-2">{entry.user.name || entry.user.email}</td>
+												<td className="py-2 text-slate-400">{entry.user.inflow_username || "-"}</td>
+												<td className="py-2 text-right">{formatMoney(entry.monthlySales)}</td>
+												<td className="py-2 text-right text-emerald-300">{formatMoney(entry.share)}</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
 							) : (
-								<div className="space-y-3">
-									<div>
-										<h4>Strengths</h4>
-										<ul>{renderList(employeeFeedback[selectedEmployee.employee]?.strengths)}</ul>
-									</div>
-									<div>
-										<h4>Improvements</h4>
-										<ul>{renderList(employeeFeedback[selectedEmployee.employee]?.improvements)}</ul>
-									</div>
-									<div>
-										<h4>Next steps</h4>
-										<ul>{renderList(employeeFeedback[selectedEmployee.employee]?.next_steps)}</ul>
-									</div>
-								</div>
+								<p className="text-sm text-slate-500">No assigned chatter sales for the previous month.</p>
 							)}
 						</div>
 					)}
