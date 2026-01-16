@@ -2789,6 +2789,43 @@ function TrainingRolesPanel() {
 		queryFn: () => usersOrm.getAllUsers(),
 	});
 
+	const trainingUsers = users
+		.filter((user) => !user.is_admin)
+		.slice()
+		.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+	const trainingUserIds = useMemo(() => trainingUsers.map((u) => u.id).sort().join("|"), [trainingUsers]);
+	const { data: bulzeShareMetaList = [] } = useQuery({
+		queryKey: ["trainingBulzeShareMeta", trainingUserIds],
+		enabled: trainingUsers.length > 0,
+		queryFn: async () => {
+			const results = await Promise.all(
+				trainingUsers.map(async (u) => {
+					try {
+						const response = await fetchChatterAdminMeta(u.id);
+						return { userId: u.id, meta: response.meta };
+					} catch {
+						return { userId: u.id, meta: null as ChatterAdminMeta | null };
+					}
+				}),
+			);
+			return results;
+		},
+	});
+
+	const bulzeShareByUserId = useMemo(() => {
+		const map = new Map<string, boolean>();
+		for (const entry of bulzeShareMetaList) {
+			if (!entry.userId) continue;
+			map.set(entry.userId, Boolean(entry.meta?.bulze_share));
+		}
+		for (const [userId, meta] of Object.entries(metaDrafts)) {
+			if (!meta) continue;
+			map.set(userId, Boolean(meta.bulze_share));
+		}
+		return map;
+	}, [bulzeShareMetaList, metaDrafts]);
+
 	const saveUserAndMeta = useMutation({
 		mutationFn: async (payload: { user: UsersModel; userPatch: Partial<UsersModel>; meta: ChatterAdminMeta }) => {
 			await usersOrm.setUsersById(payload.user.id, { ...payload.user, ...payload.userPatch });
@@ -2800,17 +2837,19 @@ function TrainingRolesPanel() {
 		},
 	});
 
+	const saveMetaOnly = useMutation({
+		mutationFn: async (payload: { userId: string; meta: ChatterAdminMeta }) => {
+			const updatedIso = await saveChatterAdminMeta(payload.userId, payload.meta);
+			return { updatedIso };
+		},
+	});
+
 	const updateEdit = (userId: string, patch: Partial<UsersModel>) => {
 		setEdits((prev) => ({
 			...prev,
 			[userId]: { ...prev[userId], ...patch },
 		}));
 	};
-
-	const trainingUsers = users
-		.filter((user) => !user.is_admin)
-		.slice()
-		.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
 	useEffect(() => {
 		if (selectedUserId) return;
@@ -2942,6 +2981,7 @@ function TrainingRolesPanel() {
 						)}
 						{groupedUsers.pending.map((user) => {
 							const active = user.id === selectedUserId;
+							const isBulzeShare = bulzeShareByUserId.get(user.id);
 							return (
 								<button
 									key={user.id}
@@ -2956,9 +2996,16 @@ function TrainingRolesPanel() {
 										<p className="text-slate-100 font-medium truncate">{user.name}</p>
 										<p className="text-xs text-slate-400 truncate">{user.inflow_username || user.email}</p>
 									</div>
-									<Badge variant="outline" className="border-slate-700 text-slate-200">
-										Pending
-									</Badge>
+									<div className="flex items-center gap-2">
+										{isBulzeShare && (
+											<Badge variant="outline" className="border-emerald-400/60 text-emerald-300">
+												B
+											</Badge>
+										)}
+										<Badge variant="outline" className="border-slate-700 text-slate-200">
+											Pending
+										</Badge>
+									</div>
 								</button>
 							);
 						})}
@@ -2969,6 +3016,7 @@ function TrainingRolesPanel() {
 						)}
 						{groupedUsers.approvedChatters.map((user) => {
 							const active = user.id === selectedUserId;
+							const isBulzeShare = bulzeShareByUserId.get(user.id);
 							return (
 								<button
 									key={user.id}
@@ -2983,9 +3031,16 @@ function TrainingRolesPanel() {
 										<p className="text-slate-100 font-medium truncate">{user.name}</p>
 										<p className="text-xs text-slate-400 truncate">{user.inflow_username || user.email}</p>
 									</div>
-									<Badge variant="outline" className="border-slate-700 text-slate-200">
-										{user.role || DEFAULT_ROLE}
-									</Badge>
+									<div className="flex items-center gap-2">
+										{isBulzeShare && (
+											<Badge variant="outline" className="border-emerald-400/60 text-emerald-300">
+												B
+											</Badge>
+										)}
+										<Badge variant="outline" className="border-slate-700 text-slate-200">
+											{user.role || DEFAULT_ROLE}
+										</Badge>
+									</div>
 								</button>
 							);
 						})}
@@ -2996,6 +3051,7 @@ function TrainingRolesPanel() {
 						)}
 						{groupedUsers.approvedRecruits.map((user) => {
 							const active = user.id === selectedUserId;
+							const isBulzeShare = bulzeShareByUserId.get(user.id);
 							return (
 								<button
 									key={user.id}
@@ -3010,9 +3066,16 @@ function TrainingRolesPanel() {
 										<p className="text-slate-100 font-medium truncate">{user.name}</p>
 										<p className="text-xs text-slate-400 truncate">{user.inflow_username || user.email}</p>
 									</div>
-									<Badge variant="outline" className="border-slate-700 text-slate-200">
-										{user.role || DEFAULT_ROLE}
-									</Badge>
+									<div className="flex items-center gap-2">
+										{isBulzeShare && (
+											<Badge variant="outline" className="border-emerald-400/60 text-emerald-300">
+												B
+											</Badge>
+										)}
+										<Badge variant="outline" className="border-slate-700 text-slate-200">
+											{user.role || DEFAULT_ROLE}
+										</Badge>
+									</div>
 								</button>
 							);
 						})}
@@ -3080,7 +3143,18 @@ function TrainingRolesPanel() {
 												type="checkbox"
 												className="h-4 w-4 accent-slate-200"
 												checked={Boolean(meta.bulze_share)}
-												onChange={(e) => updateMeta(selectedUser.id, { bulze_share: e.target.checked })}
+												onChange={(e) => {
+													const nextMeta = { ...meta, bulze_share: e.target.checked };
+													updateMeta(selectedUser.id, { bulze_share: e.target.checked });
+													saveMetaOnly.mutate(
+														{ userId: selectedUser.id, meta: nextMeta },
+														{
+															onSuccess: (result) => {
+																setMetaUpdatedAt((prev) => ({ ...prev, [selectedUser.id]: result.updatedIso }));
+															},
+														},
+													);
+												}}
 											/>
 											<span className="text-sm text-slate-300">
 												Add to Bulze earnings (1% of monthly sales)
