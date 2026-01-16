@@ -1724,6 +1724,8 @@ function PayrollPanel() {
 	const [employeeFeedback, setEmployeeFeedback] = useState<Record<string, PayrollEmployeeFeedback>>({});
 	const [employeeFeedbackLoading, setEmployeeFeedbackLoading] = useState(false);
 	const [percentOverrides, setPercentOverrides] = useState<Record<string, number>>({});
+	const [selectedCutIndex, setSelectedCutIndex] = useState<number | null>(null);
+	const usersOrm = UsersORM.getInstance();
 
 	const formatApiErrorMessage = (label: string, error: unknown) => {
 		const message =
@@ -1824,22 +1826,323 @@ function PayrollPanel() {
 		setCompareB((prev) => prev || employees[Math.min(1, employees.length - 1)].employee);
 	}, [employees]);
 
+	const computeShiftBonus = (value: number) => {
+		if (!Number.isFinite(value) || value <= 0) return 0;
+		return Math.floor(value / 500) * 15;
+	};
+
+	const buildDailySalesMap = (emp: PayrollEmployee) => {
+		const map = new Map<string, number>();
+		const daily = emp.daily_sales ?? {};
+		if (Object.keys(daily).length > 0) {
+			for (const [dateKeyRaw, value] of Object.entries(daily)) {
+				const dateKey = String(dateKeyRaw || "").slice(0, 10);
+				if (!dateKey) continue;
+				map.set(dateKey, (map.get(dateKey) ?? 0) + Number(value ?? 0));
+			}
+			return map;
+		}
+		const shifts = emp.shifts ?? [];
+		for (const shift of shifts) {
+			const dateKey = String(shift.date || "").slice(0, 10);
+			if (!dateKey) continue;
+			map.set(dateKey, (map.get(dateKey) ?? 0) + Number(shift.sales ?? 0));
+		}
+		return map;
+	};
+
+	const buildDailyBonusMap = (emp: PayrollEmployee, salesMap: Map<string, number>) => {
+		const map = new Map<string, number>();
+		const daily = emp.daily_bonus ?? {};
+		if (Object.keys(daily).length > 0) {
+			for (const [dateKeyRaw, value] of Object.entries(daily)) {
+				const dateKey = String(dateKeyRaw || "").slice(0, 10);
+				if (!dateKey) continue;
+				map.set(dateKey, (map.get(dateKey) ?? 0) + Number(value ?? 0));
+			}
+			return map;
+		}
+		for (const [dateKey, sales] of salesMap.entries()) {
+			map.set(dateKey, computeShiftBonus(sales));
+		}
+		return map;
+	};
+
+	const buildMonthlySalesMap = (salesMap: Map<string, number>) => {
+		const monthMap = new Map<string, number>();
+		for (const [dateKey, value] of salesMap.entries()) {
+			let date: Date | null = null;
+			try {
+				date = parseISO(dateKey);
+			} catch {
+				date = null;
+			}
+			if (!date) continue;
+			const monthKey = format(startOfMonth(date), "yyyy-MM");
+			monthMap.set(monthKey, (monthMap.get(monthKey) ?? 0) + value);
+		}
+		return monthMap;
+	};
+
+	const employeeDailyMaps = useMemo(() => {
+		return employees.map((emp) => {
+			const salesMap = buildDailySalesMap(emp);
+			const bonusMap = buildDailyBonusMap(emp, salesMap);
+			const monthlySalesMap = buildMonthlySalesMap(salesMap);
+			return { employee: emp.employee, salesMap, bonusMap, monthlySalesMap };
+		});
+	}, [employees]);
+
+	const statsByEmployee = useMemo(() => {
+		return new Map(employeeDailyMaps.map((entry) => [entry.employee, entry]));
+	}, [employeeDailyMaps]);
+
+	const payrollDateRange = useMemo(() => {
+		let min: Date | null = null;
+		let max: Date | null = null;
+		for (const entry of employeeDailyMaps) {
+			for (const dateKey of entry.salesMap.keys()) {
+				let date: Date | null = null;
+				try {
+					date = parseISO(dateKey);
+				} catch {
+					date = null;
+				}
+				if (!date) continue;
+				if (!min || date < min) min = date;
+				if (!max || date > max) max = date;
+			}
+		}
+		if (!min && minDate) {
+			try {
+				min = parseISO(minDate);
+			} catch {
+				min = null;
+			}
+		}
+		if (!max && maxDate) {
+			try {
+				max = parseISO(maxDate);
+			} catch {
+				max = null;
+			}
+		}
+		return { min, max };
+	}, [employeeDailyMaps, minDate, maxDate]);
+
+	const payPeriods = useMemo(() => {
+		if (!payrollDateRange.min || !payrollDateRange.max) return [];
+		const PERIOD_DAYS = 14;
+		let start = payrollDateRange.min;
+		while (getDay(start) !== 5) start = subDays(start, 1);
+		const last = payrollDateRange.max;
+		const periods: Array<{ start: Date; endExclusive: Date; key: string }> = [];
+		while (start <= addDays(last, 1)) {
+			const endExclusive = addDays(start, PERIOD_DAYS);
+			const key = `${format(start, "yyyy-MM-dd")}__${format(endExclusive, "yyyy-MM-dd")}`;
+			periods.push({ start, endExclusive, key });
+			start = endExclusive;
+		}
+		return periods;
+	}, [payrollDateRange]);
+
+	const currentCutIndex = useMemo(() => {
+		if (!payPeriods.length) return -1;
+		let reference: Date | null = null;
+		if (maxDate) {
+			try {
+				reference = parseISO(maxDate);
+			} catch {
+				reference = null;
+			}
+		}
+		if (!reference) reference = payrollDateRange.max;
+		if (!reference) return payPeriods.length - 1;
+		const idx = payPeriods.findIndex((p) => reference && reference >= p.start && reference < p.endExclusive);
+		return idx >= 0 ? idx : payPeriods.length - 1;
+	}, [payPeriods, maxDate, payrollDateRange]);
+
+	useEffect(() => {
+		if (!payPeriods.length) {
+			setSelectedCutIndex(null);
+			return;
+		}
+		setSelectedCutIndex((prev) => {
+			if (prev === null || prev < 0 || prev >= payPeriods.length) return currentCutIndex;
+			return prev;
+		});
+	}, [payPeriods, currentCutIndex]);
+
+	const selectedPeriod = useMemo(() => {
+		if (selectedCutIndex === null) return null;
+		return payPeriods[selectedCutIndex] ?? null;
+	}, [payPeriods, selectedCutIndex]);
+
+	const isBulzeInPayroll = useMemo(
+		() => employees.some((emp) => normalizeName(emp.employee) === "bulze"),
+		[employees],
+	);
+
+	const { data: allUsers = [] } = useQuery({
+		queryKey: ["payrollAllUsers"],
+		queryFn: () => usersOrm.getAllUsers(),
+		enabled: isBulzeInPayroll,
+	});
+	const allUserIds = useMemo(() => allUsers.map((u) => u.id).sort().join("|"), [allUsers]);
+	const { data: bulzeShareMeta = [] } = useQuery({
+		queryKey: ["payrollBulzeShareMeta", allUserIds],
+		enabled: isBulzeInPayroll && allUsers.length > 0,
+		queryFn: async () => {
+			const base = allUsers.filter((u) => !u.is_admin);
+			const results = await Promise.all(
+				base.map(async (u) => {
+					try {
+						const response = await fetchChatterAdminMeta(u.id);
+						return { user: u, meta: response.meta };
+					} catch {
+						return { user: u, meta: null };
+					}
+				}),
+			);
+			return results;
+		},
+	});
+
+	const bulzeAssignedUsers = useMemo(() => {
+		const fallbackNames = new Set(BULZE_DEFAULT_NAMES);
+		return bulzeShareMeta.filter(({ user: rowUser, meta }) => {
+			const explicit = meta?.bulze_share;
+			if (explicit === true) return true;
+			if (explicit === false) return false;
+			const name = normalizeName(rowUser.name);
+			const inflowName = normalizeName(rowUser.inflow_username);
+			return (name && fallbackNames.has(name)) || (inflowName && fallbackNames.has(inflowName));
+		});
+	}, [bulzeShareMeta]);
+
+	const payrollByName = useMemo(() => {
+		const map = new Map<string, PayrollEmployee>();
+		for (const emp of employees) {
+			const key = normalizeName(emp.employee);
+			if (key && !map.has(key)) map.set(key, emp);
+		}
+		return map;
+	}, [employees]);
+
+	const bulzeShareByMonth = useMemo(() => {
+		if (!isBulzeInPayroll || bulzeAssignedUsers.length === 0) return new Map<string, number>();
+		const map = new Map<string, number>();
+		for (const { user: rowUser } of bulzeAssignedUsers) {
+			const inflowName = normalizeName(rowUser.inflow_username);
+			const name = normalizeName(rowUser.name);
+			const employeeMatch = (inflowName && payrollByName.get(inflowName))
+				|| (name && payrollByName.get(name))
+				|| null;
+			if (!employeeMatch) continue;
+			const stats = statsByEmployee.get(employeeMatch.employee);
+			if (!stats) continue;
+			for (const [monthKey, value] of stats.monthlySalesMap.entries()) {
+				map.set(monthKey, (map.get(monthKey) ?? 0) + value * 0.01);
+			}
+		}
+		return map;
+	}, [isBulzeInPayroll, bulzeAssignedUsers, payrollByName, statsByEmployee]);
+
 	const computedEmployees = useMemo(() => {
 		return employees.map((emp) => {
 			const percent = Number(emp.percent ?? defaultPercent / 100);
-			const sales = Number(emp.sales ?? 0);
-			const bonus = Number(emp.bonus ?? 0);
-			const basePay = sales * percent;
-			const totalPay = basePay + bonus;
-			return { ...emp, percent, basePay, totalPay };
+			const fallbackSales = Number(emp.sales ?? 0);
+			const fallbackBonus = Number(emp.bonus ?? 0);
+			const fallbackBasePay = fallbackSales * percent;
+			const fallbackTotalPay = fallbackBasePay + fallbackBonus;
+
+			if (!selectedPeriod) {
+				return {
+					...emp,
+					percent,
+					basePay: fallbackBasePay,
+					totalPay: fallbackTotalPay,
+					cutSales: fallbackSales,
+					cutBonus: fallbackBonus,
+				};
+			}
+
+			const stats = statsByEmployee.get(emp.employee);
+			if (!stats) {
+				return {
+					...emp,
+					percent,
+					basePay: fallbackBasePay,
+					totalPay: fallbackTotalPay,
+					cutSales: fallbackSales,
+					cutBonus: fallbackBonus,
+				};
+			}
+
+			let cutSales = 0;
+			let cutBonus = 0;
+			for (const [dateKey, value] of stats.salesMap.entries()) {
+				let date: Date | null = null;
+				try {
+					date = parseISO(dateKey);
+				} catch {
+					date = null;
+				}
+				if (!date || date < selectedPeriod.start || date >= selectedPeriod.endExclusive) continue;
+				cutSales += value;
+			}
+			for (const [dateKey, value] of stats.bonusMap.entries()) {
+				let date: Date | null = null;
+				try {
+					date = parseISO(dateKey);
+				} catch {
+					date = null;
+				}
+				if (!date || date < selectedPeriod.start || date >= selectedPeriod.endExclusive) continue;
+				cutBonus += value;
+			}
+
+			let performanceBonus = 0;
+			const monthStartCandidate = startOfMonth(selectedPeriod.endExclusive);
+			if (monthStartCandidate > selectedPeriod.start && monthStartCandidate < selectedPeriod.endExclusive) {
+				const prevMonthStart = startOfMonth(subMonths(monthStartCandidate, 1));
+				const prevMonthKey = format(prevMonthStart, "yyyy-MM");
+				const prevSales = stats.monthlySalesMap.get(prevMonthKey) ?? 0;
+				if (prevSales > 10000) {
+					const units = Math.floor((prevSales - 1) / 10000);
+					performanceBonus = units * 250;
+				}
+			}
+
+			let bulzeShareBonus = 0;
+			if (normalizeName(emp.employee) === "bulze") {
+				const monthStartCandidate = startOfMonth(selectedPeriod.endExclusive);
+				if (monthStartCandidate > selectedPeriod.start && monthStartCandidate < selectedPeriod.endExclusive) {
+					const prevMonthStart = startOfMonth(subMonths(monthStartCandidate, 1));
+					const prevMonthKey = format(prevMonthStart, "yyyy-MM");
+					bulzeShareBonus = bulzeShareByMonth.get(prevMonthKey) ?? 0;
+				}
+			}
+
+			const totalBonus = cutBonus + performanceBonus + bulzeShareBonus;
+			const basePay = cutSales * percent;
+			const totalPay = basePay + totalBonus;
+			return {
+				...emp,
+				percent,
+				basePay,
+				totalPay,
+				cutSales,
+				cutBonus: totalBonus,
+			};
 		});
-	}, [employees, defaultPercent]);
+	}, [employees, defaultPercent, selectedPeriod, statsByEmployee, bulzeShareByMonth]);
 
 	const totals = useMemo(() => {
 		return computedEmployees.reduce(
 			(acc, emp) => {
-				acc.sales += Number(emp.sales ?? 0);
-				acc.bonus += Number(emp.bonus ?? 0);
+				acc.sales += Number(emp.cutSales ?? emp.sales ?? 0);
+				acc.bonus += Number(emp.cutBonus ?? emp.bonus ?? 0);
 				acc.total += Number(emp.totalPay ?? 0);
 				return acc;
 			},
@@ -2262,6 +2565,48 @@ function PayrollPanel() {
 						}}
 					/>
 				</div>
+				<div className="field wide">
+					<label>Cut</label>
+					<div className="file-row">
+						<select
+							value={selectedCutIndex ?? ""}
+							onChange={(e) => {
+								const nextValue = Number(e.target.value);
+								setSelectedCutIndex(Number.isNaN(nextValue) ? null : nextValue);
+							}}
+							disabled={payPeriods.length === 0}
+						>
+							{payPeriods.length === 0 && <option value="">No cuts available</option>}
+							{payPeriods.map((period, index) => {
+								const label = `Cut ${format(period.start, "MMM d, yyyy")} to ${format(subDays(period.endExclusive, 1), "MMM d, yyyy")}`;
+								return (
+									<option key={period.key} value={index}>
+										{index === currentCutIndex ? `${label} (current)` : label}
+									</option>
+								);
+							})}
+						</select>
+						<button
+							type="button"
+							className="btn ghost"
+							onClick={() => setSelectedCutIndex((prev) => (prev === null ? prev : Math.max(0, prev - 1)))}
+							disabled={selectedCutIndex === null || selectedCutIndex <= 0}
+						>
+							Prev
+						</button>
+						<button
+							type="button"
+							className="btn ghost"
+							onClick={() => setSelectedCutIndex((prev) => {
+								if (prev === null) return prev;
+								return Math.min(payPeriods.length - 1, prev + 1);
+							})}
+							disabled={selectedCutIndex === null || selectedCutIndex >= payPeriods.length - 1}
+						>
+							Next
+						</button>
+					</div>
+				</div>
 				<div className="field">
 					<label>Default %</label>
 					<input
@@ -2366,8 +2711,8 @@ function PayrollPanel() {
 								<tr key={emp.employee} onClick={() => setSelectedEmployeeName(emp.employee)}>
 									<td>{emp.employee}</td>
 									<td>{((emp.percent ?? 0) * 100).toFixed(2)}%</td>
-									<td>{formatMoney(Number(emp.sales ?? 0))}</td>
-									<td>{formatMoney(Number(emp.bonus ?? 0))}</td>
+									<td>{formatMoney(Number(emp.cutSales ?? emp.sales ?? 0))}</td>
+									<td>{formatMoney(Number(emp.cutBonus ?? emp.bonus ?? 0))}</td>
 									<td>{formatMoney(Number(emp.basePay ?? 0))}</td>
 									<td>{formatMoney(Number(emp.totalPay ?? 0))}</td>
 								</tr>
