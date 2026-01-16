@@ -2254,7 +2254,7 @@ function PayrollPanel() {
 		formData.append("ai_enabled", aiEnabled ? "true" : "false");
 
 		const controller = new AbortController();
-		const abortTimer = window.setTimeout(() => controller.abort(), 5 * 60_000);
+		const abortTimer = window.setTimeout(() => controller.abort(), 10 * 60_000);
 		const startMs = Date.now();
 		const statusTimer = window.setInterval(() => {
 			const elapsed = Math.round((Date.now() - startMs) / 1000);
