@@ -75,14 +75,8 @@ const PAYROLL_PERCENT_STORE = {
 	task: "payroll",
 };
 const PAYROLL_PERCENT_KEY = "current";
-const DAILY_VIDEO_STORE = {
-	id: "daily_video_v1",
-	namespace: "training_app",
-	name: "daily_videos",
-	version: "1",
-	task: "daily_video",
-};
-const DAILY_VIDEO_KEY = "current";
+const DAILY_VIDEO_STORE = PAYROLL_STORE;
+const DAILY_VIDEO_KEY = "daily_video_current";
 
 type PayrollEmployee = {
 	employee: string;
@@ -3684,7 +3678,10 @@ function DailyVideoPanel() {
 		return map;
 	}, [allProgress, statsVideoId]);
 
-	const chatters = useMemo(() => allUsers.filter((u) => !u.is_admin), [allUsers]);
+	const chatters = useMemo(
+		() => allUsers.filter((u) => !u.is_admin && (u.role || DEFAULT_ROLE) === "chatter"),
+		[allUsers],
+	);
 
 	return (
 		<Card className="chatter-panel">
