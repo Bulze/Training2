@@ -205,6 +205,13 @@ const valuesToObject = (values: Value[]) => {
 };
 
 const normalizeName = (value?: string | null) => (value || "").trim().toLowerCase();
+const formatDuration = (seconds?: number | null) => {
+	if (!Number.isFinite(seconds) || !seconds) return "0:00";
+	const total = Math.max(0, Math.floor(seconds));
+	const mins = Math.floor(total / 60);
+	const secs = total % 60;
+	return `${mins}:${secs.toString().padStart(2, "0")}`;
+};
 const buildDefaultChatterMeta = (): ChatterAdminMeta => ({
 	manual_bonus: 0,
 	bonus_entries: [],
@@ -4891,7 +4898,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				)}
 
 				{activeDailyVideo && (
-					<div className="daily-card-shell">
+					<div className="daily-card-shell chatter-panel">
 						<div className="flex items-center justify-between">
 							<div>
 								<h3 className="text-sm font-semibold text-slate-200">Daily video</h3>
@@ -4953,12 +4960,6 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 											</DialogContent>
 										</Dialog>
 									</div>
-								</div>
-							</div>
-							<div className="daily-card-meta">
-								<div className="text-sm font-semibold text-slate-200">{activeDailyVideo.title}</div>
-								<div className="text-xs text-slate-400">
-									{formatDuration(activeDailyVideo.durationSeconds)} • Tap card
 								</div>
 							</div>
 						</div>
