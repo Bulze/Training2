@@ -18,7 +18,7 @@ import { UserProgressORM, type UserProgressModel } from "@/sdk/database/orm/orm_
 import { QuizAttemptsORM, type QuizAttemptsModel } from "@/sdk/database/orm/orm_quiz_attempts";
 import { CompletionsORM, type CompletionsModel } from "@/sdk/database/orm/orm_completions";
 import { UsersORM, type UsersModel } from "@/sdk/database/orm/orm_users";
-import { Play, Pause, CheckCircle2, XCircle, Trophy, Settings, Users, Trash2, LogOut, UserCircle } from "lucide-react";
+import { Play, Pause, CheckCircle2, XCircle, Trophy, Settings, Users, Trash2, LogOut, UserCircle, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CreateData, CreateValue, DataStoreClient, ParseValue } from "@/sdk/database/orm/client";
 import { DataType, SimpleSelector, type Value } from "@/sdk/database/orm/common";
@@ -27,6 +27,7 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import {
 	addDays,
 	addMonths,
+	differenceInCalendarDays,
 	endOfMonth,
 	endOfWeek,
 	format,
@@ -173,6 +174,8 @@ type ChatterAdminMeta = {
 	admin_notes?: string;
 	admin_review?: string;
 	bulze_share?: boolean;
+	login_streak?: number;
+	last_login_date?: string;
 };
 
 const payrollClient = DataStoreClient.getInstance();
@@ -187,6 +190,16 @@ const valuesToObject = (values: Value[]) => {
 };
 
 const normalizeName = (value?: string | null) => (value || "").trim().toLowerCase();
+const buildDefaultChatterMeta = (): ChatterAdminMeta => ({
+	manual_bonus: 0,
+	bonus_entries: [],
+	manual_penalty: 0,
+	admin_notes: "",
+	admin_review: "",
+	bulze_share: false,
+	login_streak: 0,
+	last_login_date: undefined,
+});
 
 const buildPayrollIndex = (key: string) => ({
 	fields: ["key"],
@@ -304,6 +317,8 @@ const fetchChatterAdminMeta = async (userId: string) => {
 		admin_notes?: string;
 		admin_review?: string;
 		bulze_share?: boolean;
+		login_streak?: number;
+		last_login_date?: string;
 		updated_at?: string;
 	};
 	return {
@@ -314,6 +329,8 @@ const fetchChatterAdminMeta = async (userId: string) => {
 			admin_notes: String(record.admin_notes ?? ""),
 			admin_review: String(record.admin_review ?? ""),
 			bulze_share: Boolean(record.bulze_share ?? false),
+			login_streak: Number(record.login_streak ?? 0),
+			last_login_date: record.last_login_date ? String(record.last_login_date) : undefined,
 		},
 		updatedAt: record.updated_at ?? null,
 	};
@@ -329,6 +346,8 @@ const saveChatterAdminMeta = async (userId: string, meta: ChatterAdminMeta) => {
 		CreateValue(DataType.string, meta.admin_notes ?? "", "admin_notes"),
 		CreateValue(DataType.string, meta.admin_review ?? "", "admin_review"),
 		CreateValue(DataType.boolean, Boolean(meta.bulze_share ?? false), "bulze_share"),
+		CreateValue(DataType.number, Number(meta.login_streak ?? 0), "login_streak"),
+		CreateValue(DataType.string, meta.last_login_date ?? "", "last_login_date"),
 		CreateValue(DataType.string, updatedAt, "updated_at"),
 	]);
 
@@ -476,6 +495,52 @@ function App() {
 	const [currentUser, setCurrentUser] = useState<UsersModel | null>(null);
 	const isAdmin = Boolean(currentUser?.is_admin || currentUser?.email === ADMIN_EMAIL);
 	const isApproved = Boolean(currentUser && (isAdmin || currentUser.is_approved));
+	const [streakCelebration, setStreakCelebration] = useState<{ streak: number; dateKey: string } | null>(null);
+
+	const triggerStreakCelebration = (userId: string, streak: number, dateKey: string) => {
+		if (!userId || !streak || !dateKey) return;
+		const shownKey = `login_streak_shown_${userId}_${dateKey}`;
+		if (sessionStorage.getItem(shownKey)) return;
+		sessionStorage.setItem(shownKey, "1");
+		setStreakCelebration({ streak, dateKey });
+		window.setTimeout(() => setStreakCelebration(null), 3500);
+	};
+
+	const updateLoginStreakForUser = async (user: UsersModel) => {
+		if (!user || user.is_admin) return null;
+		const todayKey = format(new Date(), "yyyy-MM-dd");
+		const response = await fetchChatterAdminMeta(user.id);
+		const meta = response.meta ? { ...buildDefaultChatterMeta(), ...response.meta } : buildDefaultChatterMeta();
+
+		if (meta.last_login_date === todayKey) {
+			return { streak: Number(meta.login_streak ?? 0), updated: false, dateKey: todayKey };
+		}
+
+		let nextStreak = 1;
+		const lastKey = meta.last_login_date;
+		if (lastKey) {
+			let lastDate: Date | null = null;
+			try {
+				lastDate = parseISO(lastKey);
+			} catch {
+				lastDate = null;
+			}
+			if (lastDate) {
+				const diff = differenceInCalendarDays(new Date(), lastDate);
+				if (diff === 1) {
+					const prev = Number(meta.login_streak ?? 0);
+					nextStreak = Math.max(1, prev) + 1;
+				} else if (diff === 0) {
+					nextStreak = Number(meta.login_streak ?? 1) || 1;
+				}
+			}
+		}
+
+		meta.last_login_date = todayKey;
+		meta.login_streak = nextStreak;
+		await saveChatterAdminMeta(user.id, meta);
+		return { streak: nextStreak, updated: true, dateKey: todayKey };
+	};
 
 	// Check for logged in user on mount
 	useEffect(() => {
@@ -485,6 +550,11 @@ function App() {
 			usersOrm.getUsersByIDs([userId]).then((users) => {
 				if (users.length > 0) {
 					setCurrentUser(users[0]);
+					updateLoginStreakForUser(users[0])
+						.then((result) => {
+							if (result) triggerStreakCelebration(users[0].id, result.streak, result.dateKey);
+						})
+						.catch(() => {});
 				} else {
 					sessionStorage.removeItem("current_user_id");
 				}
@@ -495,6 +565,11 @@ function App() {
 	const handleLogin = (user: UsersModel) => {
 		setCurrentUser(user);
 		sessionStorage.setItem("current_user_id", user.id);
+		updateLoginStreakForUser(user)
+			.then((result) => {
+				if (result) triggerStreakCelebration(user.id, result.streak, result.dateKey);
+			})
+			.catch(() => {});
 	};
 
 	const handleLogout = () => {
@@ -549,6 +624,24 @@ function App() {
 
 				{view === "admin" && isAdmin ? <AdminPanel /> : currentUser && <UserView user={currentUser} />}
 			</div>
+			{streakCelebration && (
+				<div className="streak-overlay" role="status">
+					<div className="streak-overlay-card">
+						<div className="streak-flame">
+							<Flame className="w-10 h-10" />
+						</div>
+						<div className="streak-overlay-text">
+							<span>Login streak</span>
+							<strong>{streakCelebration.streak} days</strong>
+						</div>
+					</div>
+					<div className="streak-confetti">
+						{Array.from({ length: 18 }).map((_, idx) => (
+							<span key={idx} style={{ ["--i" as string]: idx }} />
+						))}
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }
@@ -1966,12 +2059,11 @@ function PayrollPanel() {
 	const { data: allUsers = [] } = useQuery({
 		queryKey: ["payrollAllUsers"],
 		queryFn: () => usersOrm.getAllUsers(),
-		enabled: isBulzeInPayroll,
 	});
 	const allUserIds = useMemo(() => allUsers.map((u) => u.id).sort().join("|"), [allUsers]);
 	const { data: bulzeShareMeta = [] } = useQuery({
 		queryKey: ["payrollBulzeShareMeta", allUserIds],
-		enabled: isBulzeInPayroll && allUsers.length > 0,
+		enabled: allUsers.length > 0,
 		queryFn: async () => {
 			const base = allUsers.filter((u) => !u.is_admin);
 			const results = await Promise.all(
@@ -2027,6 +2119,19 @@ function PayrollPanel() {
 		}
 		return map;
 	}, [isBulzeInPayroll, bulzeAssignedUsers, payrollByName, statsByEmployee]);
+
+	const loginStreakByName = useMemo(() => {
+		const map = new Map<string, number>();
+		for (const entry of bulzeShareMeta) {
+			const streak = Number(entry.meta?.login_streak ?? 0);
+			if (!streak) continue;
+			const nameKey = normalizeName(entry.user.name);
+			const inflowKey = normalizeName(entry.user.inflow_username);
+			if (nameKey) map.set(nameKey, streak);
+			if (inflowKey) map.set(inflowKey, streak);
+		}
+		return map;
+	}, [bulzeShareMeta]);
 
 	const computedEmployees = useMemo(() => {
 		return employees.map((emp) => {
@@ -2643,7 +2748,21 @@ function PayrollPanel() {
 						<tbody>
 							{visibleEmployees.map((emp) => (
 								<tr key={emp.employee} onClick={() => setSelectedEmployeeName(emp.employee)}>
-									<td>{emp.employee}</td>
+									<td>
+										<div className="flex items-center gap-2">
+											<span>{emp.employee}</span>
+											{(() => {
+												const streak = loginStreakByName.get(normalizeName(emp.employee)) ?? 0;
+												if (!streak) return null;
+												return (
+													<span className="streak-pill streak-pill-compact">
+														<Flame className="w-3.5 h-3.5" />
+														<span>{streak}</span>
+													</span>
+												);
+											})()}
+										</div>
+									</td>
 									<td>{((emp.percent ?? 0) * 100).toFixed(2)}%</td>
 									<td>{formatMoney(Number(emp.cutSales ?? emp.sales ?? 0))}</td>
 									<td>{formatMoney(Number(emp.cutBonus ?? emp.bonus ?? 0))}</td>
@@ -2871,7 +2990,7 @@ function TrainingRolesPanel() {
 		const meta = selectedMetaResponse?.meta;
 		setMetaDrafts((prev) => ({
 			...prev,
-			[selectedUserId]: meta ?? { manual_bonus: 0, bonus_entries: [], manual_penalty: 0, admin_notes: "", admin_review: "", bulze_share: false },
+			[selectedUserId]: meta ?? buildDefaultChatterMeta(),
 		}));
 		setMetaUpdatedAt((prev) => ({
 			...prev,
@@ -3097,7 +3216,7 @@ function TrainingRolesPanel() {
 						const draft = edits[selectedUser.id] || {};
 						const role = (draft.role ?? selectedUser.role ?? DEFAULT_ROLE) as string;
 						const inflow = (draft.inflow_username ?? selectedUser.inflow_username ?? "") as string;
-						const meta = metaDrafts[selectedUser.id] ?? { manual_bonus: 0, bonus_entries: [], manual_penalty: 0, admin_notes: "", admin_review: "", bulze_share: false };
+						const meta = metaDrafts[selectedUser.id] ?? buildDefaultChatterMeta();
 						const metaUpdated = metaUpdatedAt[selectedUser.id] ?? null;
 						const bonusDraft = getBonusDraft(selectedUser.id);
 
@@ -3776,6 +3895,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const percent = Number(employee?.percent ?? 0.09);
 	const chatterMeta = chatterMetaResponse?.meta ?? null;
 	const bonusEntries = Array.isArray(chatterMeta?.bonus_entries) ? chatterMeta.bonus_entries : [];
+	const loginStreak = Number(chatterMeta?.login_streak ?? 0);
 	const sales = Number(employee?.sales ?? 0);
 
 	const computeShiftBonus = (value: number) => {
@@ -4135,14 +4255,22 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 							Your earnings overview from the latest payroll upload
 						</CardDescription>
 					</div>
-					<Button
-						variant="outline"
-						size="sm"
-						onClick={loadSnapshot}
-						className="border-slate-700 hover:bg-slate-800"
-					>
-						Refresh
-					</Button>
+					<div className="flex items-center gap-3">
+						{loginStreak > 0 && (
+							<div className="streak-pill">
+								<Flame className="w-4 h-4" />
+								<span>{loginStreak}d</span>
+							</div>
+						)}
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={loadSnapshot}
+							className="border-slate-700 hover:bg-slate-800"
+						>
+							Refresh
+						</Button>
+					</div>
 				</div>
 				{lastUpdated && (
 					<p className="text-xs text-slate-500">
