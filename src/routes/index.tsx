@@ -3501,6 +3501,7 @@ function DailyVideoPanel() {
 	const [videoDuration, setVideoDuration] = useState(0);
 	const [status, setStatus] = useState("");
 	const [statsVideoId, setStatsVideoId] = useState<string>("");
+	const [logLines, setLogLines] = useState<string[]>([]);
 
 	const queryClient = useQueryClient();
 	const usersOrm = UsersORM.getInstance();
@@ -3568,32 +3569,47 @@ function DailyVideoPanel() {
 			reader.readAsDataURL(file);
 		});
 
+	const addLog = (message: string) => {
+		const stamp = new Date().toLocaleTimeString();
+		setLogLines((prev) => [...prev.slice(-19), `[${stamp}] ${message}`]);
+	};
+
 	const saveVideos = useMutation({
 		mutationFn: async (videos: DailyVideo[]) => saveDailyVideos(videos),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["dailyVideos"] });
 		},
+		onError: (error) => {
+			const message = error instanceof Error ? error.message : "Unknown error";
+			addLog(`Save failed: ${message}`);
+		},
 	});
 
 	const handlePublish = async () => {
+		addLog("Publish clicked.");
 		if (!videoTitle.trim()) {
 			setStatus("Add a title.");
+			addLog("Missing title.");
 			return;
 		}
 		if (!videoFile && !videoUrl.trim()) {
 			setStatus("Upload a video file or add a link.");
+			addLog("Missing file or link.");
 			return;
 		}
 		if (!videoDuration) {
 			setStatus("Video duration is missing.");
+			addLog("Missing duration.");
 			return;
 		}
 		if (videoFile && videoFile.size > 70 * 1024 * 1024) {
 			setStatus("Video is too large for in-app storage (70MB limit).");
+			addLog("File too large.");
 			return;
 		}
 
 		setStatus("Uploading...");
+		addLog("Uploading...");
 		try {
 			const url = videoFile ? await readFileAsDataUrl(videoFile) : videoUrl.trim();
 			const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -3614,8 +3630,11 @@ function DailyVideoPanel() {
 			setVideoUrl("");
 			setVideoDuration(0);
 			setStatus("Daily video published.");
+			addLog(`Published: ${nextVideo.title}`);
 		} catch (error) {
-			setStatus(error instanceof Error ? error.message : "Failed to upload.");
+			const message = error instanceof Error ? error.message : "Failed to upload.";
+			setStatus(message);
+			addLog(`Publish failed: ${message}`);
 		}
 	};
 
@@ -3781,6 +3800,20 @@ function DailyVideoPanel() {
 							</div>
 						))}
 					</div>
+				</div>
+				<div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 text-xs text-slate-300">
+					<div className="flex items-center justify-between mb-2">
+						<span>Daily video log</span>
+						<Button variant="ghost" size="sm" onClick={() => setLogLines([])} className="h-6 px-2 text-xs">
+							Clear
+						</Button>
+					</div>
+					{logLines.length === 0 && <div className="text-slate-500">No activity yet.</div>}
+					{logLines.length > 0 && (
+						<pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed">
+							{logLines.join("\n")}
+						</pre>
+					)}
 				</div>
 
 				<div className="space-y-3">
