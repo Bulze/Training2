@@ -557,7 +557,7 @@ code {
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
-	gap: 8px;
+	align-items: center;
 }
 
 .daily-video-modal {

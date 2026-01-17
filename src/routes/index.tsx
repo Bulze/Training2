@@ -4929,10 +4929,6 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 										<div className="daily-card-front-title">{activeDailyVideo.title}</div>
 									</div>
 									<div className="daily-card-face daily-card-back">
-										<p className="text-slate-200 text-sm font-semibold">Watch this</p>
-										<p className="text-xs text-slate-400 line-clamp-2">
-											{activeDailyVideo.description || "Daily focus video"}
-										</p>
 										<Dialog open={dailyDialogOpen} onOpenChange={setDailyDialogOpen}>
 											<DialogTrigger asChild>
 												<Button
