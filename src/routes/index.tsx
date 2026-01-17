@@ -3502,6 +3502,7 @@ function DailyVideoPanel() {
 	const [status, setStatus] = useState("");
 	const [statsVideoId, setStatsVideoId] = useState<string>("");
 	const [logLines, setLogLines] = useState<string[]>([]);
+	const [localVideos, setLocalVideos] = useState<DailyVideo[]>([]);
 
 	const queryClient = useQueryClient();
 	const usersOrm = UsersORM.getInstance();
@@ -3525,11 +3526,16 @@ function DailyVideoPanel() {
 	});
 
 	useEffect(() => {
+		if (dailyVideos.length === 0 && localVideos.length > 0) return;
+		setLocalVideos(dailyVideos);
+	}, [dailyVideos, localVideos.length]);
+
+	useEffect(() => {
 		if (statsVideoId) return;
-		const active = dailyVideos.find((v) => v.active);
+		const active = localVideos.find((v) => v.active);
 		if (active) setStatsVideoId(active.id);
-		else if (dailyVideos[0]) setStatsVideoId(dailyVideos[0].id);
-	}, [dailyVideos, statsVideoId]);
+		else if (localVideos[0]) setStatsVideoId(localVideos[0].id);
+	}, [localVideos, statsVideoId]);
 
 	useEffect(() => {
 		if (!videoFile) return;
@@ -3622,8 +3628,21 @@ function DailyVideoPanel() {
 				created_at: new Date().toISOString(),
 				active: true,
 			};
-			const nextVideos = dailyVideos.map((v) => ({ ...v, active: false })).concat(nextVideo);
+			const nextVideos = localVideos.map((v) => ({ ...v, active: false })).concat(nextVideo);
 			await saveVideos.mutateAsync(nextVideos);
+			setLocalVideos(nextVideos);
+			addLog(`Local list updated (${nextVideos.length} videos).`);
+			try {
+				const persisted = await queryClient.fetchQuery({ queryKey: ["dailyVideos"], queryFn: fetchDailyVideos });
+				const count = persisted.videos?.length ?? 0;
+				addLog(`Backend list size: ${count}.`);
+				if (count === 0) {
+					setStatus("Saved locally but not returned from backend yet.");
+				}
+			} catch (error) {
+				const message = error instanceof Error ? error.message : "Failed to fetch daily videos.";
+				addLog(`Fetch after save failed: ${message}`);
+			}
 			setVideoTitle("");
 			setVideoDescription("");
 			setVideoFile(null);
@@ -3639,14 +3658,16 @@ function DailyVideoPanel() {
 	};
 
 	const setActiveVideo = async (id: string) => {
-		const nextVideos = dailyVideos.map((v) => ({ ...v, active: v.id === id }));
+		const nextVideos = localVideos.map((v) => ({ ...v, active: v.id === id }));
 		await saveVideos.mutateAsync(nextVideos);
+		setLocalVideos(nextVideos);
 		setStatsVideoId(id);
 	};
 
 	const deleteVideo = async (id: string) => {
-		const nextVideos = dailyVideos.filter((v) => v.id !== id);
+		const nextVideos = localVideos.filter((v) => v.id !== id);
 		await saveVideos.mutateAsync(nextVideos);
+		setLocalVideos(nextVideos);
 		if (statsVideoId === id) {
 			const next = nextVideos.find((v) => v.active) || nextVideos[0];
 			setStatsVideoId(next ? next.id : "");
@@ -3742,12 +3763,12 @@ function DailyVideoPanel() {
 					</div>
 					<div className="space-y-3">
 						<p className="text-sm text-slate-400">
-							Active daily videos ({dailyVideos.length})
+							Active daily videos ({localVideos.length})
 						</p>
-						{dailyVideos.length === 0 && (
+						{localVideos.length === 0 && (
 							<p className="text-sm text-slate-500">No daily videos yet.</p>
 						)}
-						{dailyVideos.map((video) => (
+						{localVideos.map((video) => (
 							<div key={video.id} className="flex flex-col gap-2 p-3 border border-slate-700 rounded-lg chatter-panel">
 								<div className="flex items-center justify-between gap-2">
 									<div>
@@ -3827,7 +3848,7 @@ function DailyVideoPanel() {
 							value={statsVideoId}
 							onChange={(e) => setStatsVideoId(e.target.value)}
 						>
-							{dailyVideos.map((video) => (
+							{localVideos.map((video) => (
 								<option key={video.id} value={video.id}>
 									{video.title}
 								</option>
