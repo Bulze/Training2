@@ -467,7 +467,9 @@ code {
 }
 
 .daily-card-front {
-	background-size: cover;
+	background-size: contain;
+	background-repeat: no-repeat;
+	background-color: #0b1220;
 	background-position: center;
 	display: flex;
 	align-items: flex-end;
