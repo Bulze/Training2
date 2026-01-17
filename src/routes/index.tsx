@@ -155,6 +155,7 @@ type DailyVideo = {
 	duration: number;
 	created_at: string;
 	active: boolean;
+	thumbnail_url?: string;
 };
 
 type PayrollEmployeeFeedback = {
@@ -3493,6 +3494,8 @@ function DailyVideoPanel() {
 	const [videoDescription, setVideoDescription] = useState("");
 	const [videoFile, setVideoFile] = useState<File | null>(null);
 	const [videoUrl, setVideoUrl] = useState("");
+	const [cardImageFile, setCardImageFile] = useState<File | null>(null);
+	const [cardImageUrl, setCardImageUrl] = useState("");
 	const [videoDuration, setVideoDuration] = useState(0);
 	const [status, setStatus] = useState("");
 	const [statsVideoId, setStatsVideoId] = useState<string>("");
@@ -3608,11 +3611,19 @@ function DailyVideoPanel() {
 			addLog("File too large.");
 			return;
 		}
+		if (cardImageFile && cardImageFile.size > 5 * 1024 * 1024) {
+			setStatus("Card image is too large (5MB limit).");
+			addLog("Card image too large.");
+			return;
+		}
 
 		setStatus("Uploading...");
 		addLog("Uploading...");
 		try {
 			const url = videoFile ? await readFileAsDataUrl(videoFile) : videoUrl.trim();
+			const thumbnailUrl = cardImageFile
+				? await readFileAsDataUrl(cardImageFile)
+				: (cardImageUrl.trim() || "/thub1.png");
 			const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 			const nextVideo: DailyVideo = {
 				id,
@@ -3622,6 +3633,7 @@ function DailyVideoPanel() {
 				duration: videoDuration,
 				created_at: new Date().toISOString(),
 				active: true,
+				thumbnail_url: thumbnailUrl,
 			};
 			const nextVideos = localVideos.map((v) => ({ ...v, active: false })).concat(nextVideo);
 			await saveVideos.mutateAsync(nextVideos);
@@ -3642,6 +3654,8 @@ function DailyVideoPanel() {
 			setVideoDescription("");
 			setVideoFile(null);
 			setVideoUrl("");
+			setCardImageFile(null);
+			setCardImageUrl("");
 			setVideoDuration(0);
 			setStatus("Daily video published.");
 			addLog(`Published: ${nextVideo.title}`);
@@ -3740,6 +3754,31 @@ function DailyVideoPanel() {
 								value={videoDescription}
 								onChange={(e) => setVideoDescription(e.target.value)}
 								placeholder="Short summary for chatters"
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor="dailyCardFile">Card image (optional)</Label>
+							<input
+								id="dailyCardFile"
+								type="file"
+								accept="image/*"
+								onChange={(e) => {
+									setCardImageFile(e.target.files?.[0] || null);
+									if (e.target.files?.[0]) setCardImageUrl("");
+								}}
+							/>
+							{cardImageFile && (
+								<p className="text-xs text-slate-400">
+									Selected: {cardImageFile.name} ({(cardImageFile.size / 1024 / 1024).toFixed(2)} MB)
+								</p>
+							)}
+							<Input
+								value={cardImageUrl}
+								onChange={(e) => {
+									setCardImageUrl(e.target.value);
+									if (e.target.value.trim()) setCardImageFile(null);
+								}}
+								placeholder="Or paste card image URL"
 							/>
 						</div>
 						<div className="space-y-2">
@@ -4343,6 +4382,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const [calendarMonth, setCalendarMonth] = useState<Date | null>(null);
 	const [showBulzeDetails, setShowBulzeDetails] = useState(false);
 	const [dailyDialogOpen, setDailyDialogOpen] = useState(false);
+	const [dailyCardFlipped, setDailyCardFlipped] = useState(false);
 	const { data: chatterMetaResponse } = useQuery({
 		queryKey: ["chatterAdminMeta", user.id],
 		queryFn: () => fetchChatterAdminMeta(user.id),
@@ -4404,6 +4444,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		() => dailyVideoResponse?.videos?.find((video) => video.active) ?? null,
 		[dailyVideoResponse],
 	);
+	const dailyCardImage = activeDailyVideo?.thumbnail_url || "/thub1.png";
 	const { data: dailyProgress } = useQuery({
 		queryKey: ["videoProgress", user.id, activeDailyVideo?.id],
 		enabled: Boolean(activeDailyVideo),
@@ -4821,50 +4862,73 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				)}
 
 				{activeDailyVideo && (
-					<Card className="chatter-panel daily-video-card">
-						<CardHeader className="py-4">
-							<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-								<div>
-									<CardTitle className="text-sm text-slate-200">Daily video</CardTitle>
-									<CardDescription className="text-slate-400">
-										{activeDailyVideo.title}
-									</CardDescription>
-								</div>
-								<div className="flex items-center gap-3">
-									{dailyCompleted && (
-										<Badge className="bg-emerald-500/20 text-emerald-200 border border-emerald-400/50">
-											Completed
-										</Badge>
-									)}
-									<Dialog open={dailyDialogOpen} onOpenChange={setDailyDialogOpen}>
-										<DialogTrigger asChild>
-											<Button variant="outline" size="sm" className="border-slate-700 hover:bg-slate-800">
-												{dailyCompleted ? "Rewatch" : "Watch"}
-											</Button>
-										</DialogTrigger>
-										<DialogContent className="max-w-4xl">
-											<DialogHeader>
-												<DialogTitle>{activeDailyVideo.title}</DialogTitle>
-												{activeDailyVideo.description && (
-													<DialogDescription>{activeDailyVideo.description}</DialogDescription>
-												)}
-											</DialogHeader>
-											<VideoPlayer
-												video={activeDailyVideo as VideosModel}
-												userId={user.id}
-												onComplete={() => {}}
-												onBack={() => setDailyDialogOpen(false)}
-												variant="daily"
-											/>
-										</DialogContent>
-									</Dialog>
+					<div className="daily-card-shell">
+						<div className="flex items-center justify-between">
+							<div>
+								<h3 className="text-sm font-semibold text-slate-200">Daily video</h3>
+								<p className="text-xs text-slate-400">Quick focus video for today.</p>
+							</div>
+							{dailyCompleted && (
+								<Badge className="bg-emerald-500/20 text-emerald-200 border border-emerald-400/50">
+									Completed
+								</Badge>
+							)}
+						</div>
+						<div className="daily-card-deck">
+							<div
+								className={cn("daily-card", dailyCardFlipped && "daily-card-flipped")}
+								onClick={() => setDailyCardFlipped((prev) => !prev)}
+							>
+								<div className="daily-card-inner">
+									<div
+										className="daily-card-face daily-card-front"
+										style={{ backgroundImage: `url(${dailyCardImage})` }}
+									>
+										<div className="daily-card-front-title">{activeDailyVideo.title}</div>
+									</div>
+									<div className="daily-card-face daily-card-back">
+										<p className="text-slate-200 text-sm font-semibold">Watch this</p>
+										<p className="text-xs text-slate-400 line-clamp-2">
+											{activeDailyVideo.description || "Daily focus video"}
+										</p>
+										<Dialog open={dailyDialogOpen} onOpenChange={setDailyDialogOpen}>
+											<DialogTrigger asChild>
+												<Button
+													variant="outline"
+													size="sm"
+													className="border-slate-700 hover:bg-slate-800 mt-2"
+													onClick={(event) => event.stopPropagation()}
+												>
+													{dailyCompleted ? "Rewatch" : "Watch"}
+												</Button>
+											</DialogTrigger>
+											<DialogContent className="daily-video-modal">
+												<DialogHeader>
+													<DialogTitle>{activeDailyVideo.title}</DialogTitle>
+													{activeDailyVideo.description && (
+														<DialogDescription>{activeDailyVideo.description}</DialogDescription>
+													)}
+												</DialogHeader>
+												<VideoPlayer
+													video={activeDailyVideo as VideosModel}
+													userId={user.id}
+													onComplete={() => {}}
+													onBack={() => setDailyDialogOpen(false)}
+													variant="daily"
+												/>
+											</DialogContent>
+										</Dialog>
+									</div>
 								</div>
 							</div>
-						</CardHeader>
-						<CardContent className="pt-0 text-sm text-slate-300">
-							<p className="line-clamp-2">{activeDailyVideo.description || "Quick focus video for today."}</p>
-						</CardContent>
-					</Card>
+							<div className="daily-card-meta">
+								<h4 className="text-sm text-slate-200">{activeDailyVideo.title}</h4>
+								<p className="text-xs text-slate-400">
+									{Math.floor(activeDailyVideo.duration)}s • Tap card
+								</p>
+							</div>
+						</div>
+					</div>
 				)}
 
 				{employee && (
