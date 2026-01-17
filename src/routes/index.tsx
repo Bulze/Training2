@@ -75,7 +75,7 @@ const PAYROLL_PERCENT_STORE = {
 	task: "payroll",
 };
 const PAYROLL_PERCENT_KEY = "current";
-const DAILY_VIDEO_STORE = PAYROLL_STORE;
+const DAILY_VIDEO_STORE = PAYROLL_PERCENT_STORE;
 const DAILY_VIDEO_KEY = "daily_video_current";
 
 type PayrollEmployee = {
@@ -324,11 +324,12 @@ const fetchDailyVideos = async () => {
 		return { videos: [] as DailyVideo[], updatedAt: null as string | null };
 	}
 	const record = valuesToObject(structured) as {
-		videos?: DailyVideo[];
+		overrides?: { videos?: DailyVideo[] };
 		updated_at?: string;
 	};
+	const overrides = record.overrides ?? {};
 	return {
-		videos: Array.isArray(record.videos) ? record.videos : [],
+		videos: Array.isArray(overrides.videos) ? overrides.videos : [],
 		updatedAt: record.updated_at ?? null,
 	};
 };
@@ -337,7 +338,7 @@ const saveDailyVideos = async (videos: DailyVideo[]) => {
 	const updatedAt = new Date().toISOString();
 	const data = CreateData([
 		CreateValue(DataType.string, DAILY_VIDEO_KEY, "key"),
-		CreateValue(DataType.object, videos, "videos"),
+		CreateValue(DataType.object, { videos }, "overrides"),
 		CreateValue(DataType.string, updatedAt, "updated_at"),
 	]);
 
