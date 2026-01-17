@@ -5775,9 +5775,9 @@ function VideoPlayer({
 					</div>
 
 					{skipBlocked && (
-						<Alert className="bg-amber-50 border-amber-200">
-							<AlertDescription className="text-amber-800">
-								Skipping is disabled. Please continue from the last watched point.
+						<Alert className="bg-amber-900/40 border-amber-600">
+							<AlertDescription className="text-amber-200">
+								Ne preskaci ili premotavaj video. Pusti ga do kraja da bi se racunao.
 							</AlertDescription>
 						</Alert>
 					)}
