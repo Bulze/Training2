@@ -4925,6 +4925,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 											className="daily-card-art"
 											onError={() => setDailyCardImageUrl("/thub1.png")}
 										/>
+										<div className="daily-card-hint">Click on me</div>
 										<div className="daily-card-front-title">{activeDailyVideo.title}</div>
 									</div>
 									<div className="daily-card-face daily-card-back">
