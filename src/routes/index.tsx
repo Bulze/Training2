@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { createPortal } from "react-dom";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -4439,6 +4440,20 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const loginStreak = Number(chatterMeta?.login_streak ?? 0);
 	const sales = Number(employee?.sales ?? 0);
 	const adminReview = (chatterMeta?.admin_review || "").trim();
+	const adminReviewToast = showAdminReview && adminReview && typeof document !== "undefined"
+		? createPortal(
+			<div className="admin-review-toast">
+				<div className="admin-review-toast-header">
+					<span>Admin review</span>
+					<button type="button" onClick={() => setShowAdminReview(false)} aria-label="Close">
+						×
+					</button>
+				</div>
+				<p>{adminReview}</p>
+			</div>,
+			document.body,
+		)
+		: null;
 	const { data: dailyVideoResponse } = useQuery({
 		queryKey: ["dailyVideos"],
 		queryFn: () => fetchDailyVideos(),
@@ -4850,17 +4865,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				)}
 			</CardHeader>
 			<CardContent className="space-y-6">
-				{showAdminReview && adminReview && (
-					<div className="admin-review-toast">
-						<div className="admin-review-toast-header">
-							<span>Admin review</span>
-							<button type="button" onClick={() => setShowAdminReview(false)} aria-label="Close">
-								×
-							</button>
-						</div>
-						<p>{adminReview}</p>
-					</div>
-				)}
+				{adminReviewToast}
 				{!inflow && (
 					<Alert className="bg-amber-50 border-amber-200">
 						<AlertDescription className="text-amber-800">

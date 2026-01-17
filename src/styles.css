@@ -439,6 +439,9 @@ code {
 .daily-card {
 	width: 240px;
 	height: 340px;
+	min-width: 240px;
+	min-height: 340px;
+	flex: 0 0 auto;
 	perspective: 1000px;
 	cursor: pointer;
 }
