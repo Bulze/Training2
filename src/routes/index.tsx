@@ -3649,7 +3649,7 @@ function DailyVideoPanel() {
 				active: true,
 				thumbnail_url: thumbnailUrl,
 			};
-			const nextVideos = localVideos.map((v) => ({ ...v, active: false })).concat(nextVideo);
+			const nextVideos = localVideos.concat(nextVideo);
 			await saveVideos.mutateAsync(nextVideos);
 			setLocalVideos(nextVideos);
 			addLog(`Local list updated (${nextVideos.length} videos).`);
@@ -3680,8 +3680,8 @@ function DailyVideoPanel() {
 		}
 	};
 
-	const setActiveVideo = async (id: string) => {
-		const nextVideos = localVideos.map((v) => ({ ...v, active: v.id === id }));
+	const toggleActiveVideo = async (id: string) => {
+		const nextVideos = localVideos.map((v) => (v.id === id ? { ...v, active: !v.active } : v));
 		await saveVideos.mutateAsync(nextVideos);
 		setLocalVideos(nextVideos);
 		setStatsVideoId(id);
@@ -3711,6 +3711,7 @@ function DailyVideoPanel() {
 		() => allUsers.filter((u) => !u.is_admin && (u.role || DEFAULT_ROLE) === "chatter"),
 		[allUsers],
 	);
+	const activeDailyCount = localVideos.filter((video) => video.active).length;
 
 	return (
 		<Card className="chatter-panel">
@@ -3814,7 +3815,7 @@ function DailyVideoPanel() {
 					</div>
 					<div className="space-y-3">
 						<p className="text-sm text-slate-400">
-							Active daily videos ({localVideos.length})
+							Active daily videos ({activeDailyCount})
 						</p>
 						{localVideos.length === 0 && (
 							<p className="text-sm text-slate-500">No daily videos yet.</p>
@@ -3855,10 +3856,9 @@ function DailyVideoPanel() {
 										<Button
 											variant="outline"
 											size="sm"
-											onClick={() => setActiveVideo(video.id)}
-											disabled={video.active}
+											onClick={() => toggleActiveVideo(video.id)}
 										>
-											Set active
+											{video.active ? "Deactivate" : "Activate"}
 										</Button>
 										<Button
 											variant="outline"
@@ -4395,9 +4395,8 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 	const [calendarMonth, setCalendarMonth] = useState<Date | null>(null);
 	const [showBulzeDetails, setShowBulzeDetails] = useState(false);
-	const [dailyDialogOpen, setDailyDialogOpen] = useState(false);
-	const [dailyCardFlipped, setDailyCardFlipped] = useState(false);
-	const [dailyCardImageUrl, setDailyCardImageUrl] = useState("/thub1.png");
+	const [dailyDialogVideo, setDailyDialogVideo] = useState<DailyVideo | null>(null);
+	const [dailyCardFlipped, setDailyCardFlipped] = useState<Record<string, boolean>>({});
 	const [showAdminReview, setShowAdminReview] = useState(true);
 	const { data: chatterMetaResponse } = useQuery({
 		queryKey: ["chatterAdminMeta", user.id],
@@ -4471,8 +4470,8 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		queryKey: ["dailyVideos"],
 		queryFn: () => fetchDailyVideos(),
 	});
-	const activeDailyVideo = useMemo(
-		() => dailyVideoResponse?.videos?.find((video) => video.active) ?? null,
+	const activeDailyVideos = useMemo(
+		() => dailyVideoResponse?.videos?.filter((video) => video.active) ?? [],
 		[dailyVideoResponse],
 	);
 	const normalizeImageUrl = (raw?: string) => {
@@ -4483,19 +4482,21 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		return `https://${trimmed}`;
 	};
 
-	useEffect(() => {
-		setDailyCardImageUrl(normalizeImageUrl(activeDailyVideo?.thumbnail_url));
-	}, [activeDailyVideo]);
-	const { data: dailyProgress } = useQuery({
-		queryKey: ["videoProgress", user.id, activeDailyVideo?.id],
-		enabled: Boolean(activeDailyVideo),
-		queryFn: async () => {
-			if (!activeDailyVideo) return null;
-			const progress = await progressOrm.getUserProgressByUserIdVideoId(user.id, activeDailyVideo.id);
-			return progress[0] || null;
-		},
+	const { data: dailyProgress = [] } = useQuery({
+		queryKey: ["dailyProgress", user.id],
+		queryFn: () => progressOrm.getUserProgressByUserId(user.id),
 	});
-	const dailyCompleted = Boolean(dailyProgress?.is_completed);
+	const progressByVideo = useMemo(() => {
+		const map = new Map<string, UserProgressModel>();
+		for (const entry of dailyProgress) {
+			map.set(entry.video_id, entry);
+		}
+		return map;
+	}, [dailyProgress]);
+	const completedCount = useMemo(
+		() => activeDailyVideos.filter((video) => progressByVideo.get(video.id)?.is_completed).length,
+		[activeDailyVideos, progressByVideo],
+	);
 
 	const computeShiftBonus = (value: number) => {
 		if (!Number.isFinite(value) || value <= 0) return 0;
@@ -4903,68 +4904,87 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 					</Alert>
 				)}
 
-				{activeDailyVideo && (
+				{activeDailyVideos.length > 0 && (
 					<div className="daily-card-shell chatter-panel">
 						<div className="daily-card-header flex items-center justify-between">
 							<div>
-								<CardTitle className="daily-card-title">Daily video</CardTitle>
-								<CardDescription className="daily-card-subtitle">Quick focus video for today.</CardDescription>
+								<CardTitle className="daily-card-title">Training Grounds</CardTitle>
+								<CardDescription className="daily-card-subtitle">Must watch</CardDescription>
 							</div>
-							{dailyCompleted && (
+							{completedCount > 0 && (
 								<Badge className="bg-emerald-500/20 text-emerald-200 border border-emerald-400/50">
-									Completed
+									Completed {completedCount}/{activeDailyVideos.length}
 								</Badge>
 							)}
 						</div>
 						<div className="daily-card-deck">
-							<div
-								className={cn("daily-card", dailyCardFlipped && "daily-card-flipped")}
-								onClick={() => setDailyCardFlipped((prev) => !prev)}
-							>
-								<div className="daily-card-inner">
+							{activeDailyVideos.map((video) => {
+								const isCompleted = Boolean(progressByVideo.get(video.id)?.is_completed);
+								return (
 									<div
-										className="daily-card-face daily-card-front"
+										key={video.id}
+										className={cn("daily-card", dailyCardFlipped[video.id] && "daily-card-flipped")}
+										onClick={() =>
+											setDailyCardFlipped((prev) => ({
+												...prev,
+												[video.id]: !prev[video.id],
+											}))
+										}
 									>
-										<img
-											src={dailyCardImageUrl}
-											alt={activeDailyVideo.title}
-											className="daily-card-art"
-											onError={() => setDailyCardImageUrl("/thub1.png")}
-										/>
-										<div className="daily-card-hint">Click on me</div>
-										<div className="daily-card-front-title">{activeDailyVideo.title}</div>
-									</div>
-									<div className="daily-card-face daily-card-back">
-										<Dialog open={dailyDialogOpen} onOpenChange={setDailyDialogOpen}>
-											<DialogTrigger asChild>
-												<Button
-													variant="outline"
-													size="sm"
-													className="border-slate-700 hover:bg-slate-800 mt-2"
-													onClick={(event) => event.stopPropagation()}
-												>
-													{dailyCompleted ? "Rewatch" : "Watch"}
-												</Button>
-											</DialogTrigger>
-											<DialogContent className="daily-video-modal">
-												<DialogHeader>
-													<DialogTitle>{activeDailyVideo.title}</DialogTitle>
-													{activeDailyVideo.description && (
-														<DialogDescription>{activeDailyVideo.description}</DialogDescription>
-													)}
-												</DialogHeader>
-												<VideoPlayer
-													video={activeDailyVideo as VideosModel}
-													userId={user.id}
-													onComplete={() => {}}
-													onBack={() => setDailyDialogOpen(false)}
-													variant="daily"
+										<div className="daily-card-inner">
+											<div className="daily-card-face daily-card-front">
+												<img
+													src={normalizeImageUrl(video.thumbnail_url)}
+													alt={video.title}
+													className="daily-card-art"
+													onError={(event) => {
+														event.currentTarget.src = "/thub1.png";
+													}}
 												/>
-											</DialogContent>
-										</Dialog>
+												<div className="daily-card-hint">Click on me</div>
+												<div className="daily-card-front-title">{video.title}</div>
+											</div>
+											<div className="daily-card-face daily-card-back">
+												<Dialog
+													open={dailyDialogVideo?.id === video.id}
+													onOpenChange={(open) => {
+														if (!open) setDailyDialogVideo(null);
+													}}
+												>
+													<DialogTrigger asChild>
+														<Button
+															variant="outline"
+															size="sm"
+															className="border-slate-700 hover:bg-slate-800"
+															onClick={(event) => {
+																event.stopPropagation();
+																setDailyDialogVideo(video);
+															}}
+														>
+															{isCompleted ? "Rewatch" : "Watch"}
+														</Button>
+													</DialogTrigger>
+													<DialogContent className="daily-video-modal">
+														<DialogHeader>
+															<DialogTitle>{video.title}</DialogTitle>
+															{video.description && (
+																<DialogDescription>{video.description}</DialogDescription>
+															)}
+														</DialogHeader>
+														<VideoPlayer
+															video={video as VideosModel}
+															userId={user.id}
+															onComplete={() => {}}
+															onBack={() => setDailyDialogVideo(null)}
+															variant="daily"
+														/>
+													</DialogContent>
+												</Dialog>
+											</div>
+										</div>
 									</div>
-								</div>
-							</div>
+								);
+							})}
 						</div>
 					</div>
 				)}
