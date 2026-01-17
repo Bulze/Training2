@@ -501,9 +501,20 @@ function App() {
 		if (!userId || !streak || !dateKey) return;
 		const shownKey = `login_streak_shown_${userId}_${dateKey}`;
 		if (sessionStorage.getItem(shownKey)) return;
-		sessionStorage.setItem(shownKey, "1");
-		setStreakCelebration({ streak, dateKey });
-		window.setTimeout(() => setStreakCelebration(null), 3500);
+		const show = () => {
+			sessionStorage.setItem(shownKey, "1");
+			setStreakCelebration({ streak, dateKey });
+			window.setTimeout(() => setStreakCelebration(null), 3500);
+		};
+		if (document.readyState === "complete") {
+			window.setTimeout(show, 150);
+			return;
+		}
+		const onLoad = () => {
+			window.removeEventListener("load", onLoad);
+			window.setTimeout(show, 150);
+		};
+		window.addEventListener("load", onLoad);
 	};
 
 	const updateLoginStreakForUser = async (user: UsersModel) => {
@@ -532,6 +543,8 @@ function App() {
 					nextStreak = Math.max(1, prev) + 1;
 				} else if (diff === 0) {
 					nextStreak = Number(meta.login_streak ?? 1) || 1;
+				} else {
+					nextStreak = 1;
 				}
 			}
 		}
