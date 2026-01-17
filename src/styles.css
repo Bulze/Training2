@@ -425,7 +425,7 @@ code {
 .daily-card-shell {
 	display: grid;
 	gap: 12px;
-	padding: 14px 16px;
+	padding: 8px 2px;
 	border-radius: 16px;
 }
 
@@ -518,10 +518,6 @@ code {
 	flex-direction: column;
 	justify-content: center;
 	gap: 8px;
-}
-
-.daily-card-meta {
-	min-width: 180px;
 }
 
 .daily-video-modal {

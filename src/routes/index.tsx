@@ -4891,7 +4891,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				)}
 
 				{activeDailyVideo && (
-					<div className={cn("daily-card-shell chatter-panel")}>
+					<div className="daily-card-shell">
 						<div className="flex items-center justify-between">
 							<div>
 								<h3 className="text-sm font-semibold text-slate-200">Daily video</h3>
@@ -4954,12 +4954,6 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 										</Dialog>
 									</div>
 								</div>
-							</div>
-							<div className="daily-card-meta">
-								<h4 className="text-sm text-slate-200">{activeDailyVideo.title}</h4>
-								<p className="text-xs text-slate-400">
-									{Math.floor(activeDailyVideo.duration)}s • Tap card
-								</p>
 							</div>
 						</div>
 					</div>
