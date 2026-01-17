@@ -436,6 +436,13 @@ code {
 	align-items: flex-start;
 }
 
+.daily-card-meta {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding-top: 12px;
+}
+
 .daily-card {
 	width: 240px;
 	height: 340px;

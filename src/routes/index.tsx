@@ -4955,6 +4955,12 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 									</div>
 								</div>
 							</div>
+							<div className="daily-card-meta">
+								<div className="text-sm font-semibold text-slate-200">{activeDailyVideo.title}</div>
+								<div className="text-xs text-slate-400">
+									{formatDuration(activeDailyVideo.durationSeconds)} • Tap card
+								</div>
+							</div>
 						</div>
 					</div>
 				)}
