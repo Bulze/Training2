@@ -3497,6 +3497,7 @@ function DailyVideoPanel() {
 	const [videoTitle, setVideoTitle] = useState("");
 	const [videoDescription, setVideoDescription] = useState("");
 	const [videoFile, setVideoFile] = useState<File | null>(null);
+	const [videoUrl, setVideoUrl] = useState("");
 	const [videoDuration, setVideoDuration] = useState(0);
 	const [status, setStatus] = useState("");
 	const [statsVideoId, setStatsVideoId] = useState<string>("");
@@ -3537,8 +3538,27 @@ function DailyVideoPanel() {
 			setVideoDuration(Math.floor(videoElement.duration));
 			URL.revokeObjectURL(videoElement.src);
 		};
+		videoElement.onerror = () => {
+			setStatus("Unable to auto-detect duration from file.");
+		};
 		videoElement.src = URL.createObjectURL(videoFile);
 	}, [videoFile]);
+
+	useEffect(() => {
+		if (!videoUrl.trim()) return;
+		const videoElement = document.createElement("video");
+		videoElement.preload = "metadata";
+		videoElement.onloadedmetadata = () => {
+			const duration = Math.floor(videoElement.duration);
+			if (Number.isFinite(duration) && duration > 0) {
+				setVideoDuration(duration);
+			}
+		};
+		videoElement.onerror = () => {
+			setStatus("Unable to auto-detect duration from link. Enter it manually if needed.");
+		};
+		videoElement.src = videoUrl.trim();
+	}, [videoUrl]);
 
 	const readFileAsDataUrl = (file: File) =>
 		new Promise<string>((resolve, reject) => {
@@ -3560,22 +3580,22 @@ function DailyVideoPanel() {
 			setStatus("Add a title.");
 			return;
 		}
-		if (!videoFile) {
-			setStatus("Upload a video file.");
+		if (!videoFile && !videoUrl.trim()) {
+			setStatus("Upload a video file or add a link.");
 			return;
 		}
 		if (!videoDuration) {
 			setStatus("Video duration is missing.");
 			return;
 		}
-		if (videoFile.size > 70 * 1024 * 1024) {
+		if (videoFile && videoFile.size > 70 * 1024 * 1024) {
 			setStatus("Video is too large for in-app storage (70MB limit).");
 			return;
 		}
 
 		setStatus("Uploading...");
 		try {
-			const url = await readFileAsDataUrl(videoFile);
+			const url = videoFile ? await readFileAsDataUrl(videoFile) : videoUrl.trim();
 			const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 			const nextVideo: DailyVideo = {
 				id,
@@ -3591,6 +3611,7 @@ function DailyVideoPanel() {
 			setVideoTitle("");
 			setVideoDescription("");
 			setVideoFile(null);
+			setVideoUrl("");
 			setVideoDuration(0);
 			setStatus("Daily video published.");
 		} catch (error) {
@@ -3651,13 +3672,28 @@ function DailyVideoPanel() {
 								id="dailyFile"
 								type="file"
 								accept="video/*"
-								onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+								onChange={(e) => {
+									setVideoFile(e.target.files?.[0] || null);
+									if (e.target.files?.[0]) setVideoUrl("");
+								}}
 							/>
 							{videoFile && (
 								<p className="text-xs text-slate-400">
 									Selected: {videoFile.name} ({(videoFile.size / 1024 / 1024).toFixed(2)} MB)
 								</p>
 							)}
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor="dailyUrl">Or paste a video link (YouTube/Vimeo/MP4)</Label>
+							<Input
+								id="dailyUrl"
+								value={videoUrl}
+								onChange={(e) => {
+									setVideoUrl(e.target.value);
+									if (e.target.value.trim()) setVideoFile(null);
+								}}
+								placeholder="https://..."
+							/>
 						</div>
 						<div className="space-y-2">
 							<Label htmlFor="dailyDescription">Description</Label>
@@ -3702,6 +3738,24 @@ function DailyVideoPanel() {
 										</p>
 									</div>
 									<div className="flex items-center gap-2">
+										{video.url.startsWith("data:") ? (
+											<a
+												href={video.url}
+												download={`${video.title || "daily-video"}.mp4`}
+												className="text-xs text-slate-300 underline underline-offset-2"
+											>
+												Download
+											</a>
+										) : (
+											<a
+												href={video.url}
+												target="_blank"
+												rel="noreferrer"
+												className="text-xs text-slate-300 underline underline-offset-2"
+											>
+												Open
+											</a>
+										)}
 										{video.active && (
 											<Badge variant="outline" className="border-emerald-400/60 text-emerald-300">
 												Active
