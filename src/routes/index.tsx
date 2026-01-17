@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { VideosORM, type VideosModel } from "@/sdk/database/orm/orm_videos";
 import { QuestionsORM, type QuestionsModel } from "@/sdk/database/orm/orm_questions";
 import { TrainingSessionsORM, type TrainingSessionsModel } from "@/sdk/database/orm/orm_training_sessions";
@@ -74,6 +75,14 @@ const PAYROLL_PERCENT_STORE = {
 	task: "payroll",
 };
 const PAYROLL_PERCENT_KEY = "current";
+const DAILY_VIDEO_STORE = {
+	id: "daily_video_v1",
+	namespace: "training_app",
+	name: "daily_videos",
+	version: "1",
+	task: "daily_video",
+};
+const DAILY_VIDEO_KEY = "current";
 
 type PayrollEmployee = {
 	employee: string;
@@ -142,6 +151,16 @@ type PayrollSnapshot = {
 	employees: PayrollEmployee[];
 	ai_status?: string;
 	ppv_day?: PayrollPpvDay;
+};
+
+type DailyVideo = {
+	id: string;
+	title: string;
+	description?: string;
+	url: string;
+	duration: number;
+	created_at: string;
+	active: boolean;
 };
 
 type PayrollEmployeeFeedback = {
@@ -257,6 +276,11 @@ const buildPayrollPercentIndex = (key: string) => ({
 	values: [CreateValue(DataType.string, key, "key")],
 });
 
+const buildDailyVideoIndex = (key: string) => ({
+	fields: ["key"],
+	values: [CreateValue(DataType.string, key, "key")],
+});
+
 const fetchPayrollPercentOverrides = async () => {
 	const response = await payrollClient.get({
 		...PAYROLL_PERCENT_STORE,
@@ -288,6 +312,44 @@ const savePayrollPercentOverrides = async (overrides: Record<string, number>) =>
 	await payrollClient.set({
 		...PAYROLL_PERCENT_STORE,
 		index: buildPayrollPercentIndex(PAYROLL_PERCENT_KEY),
+		data,
+		format: { structured: true },
+	});
+
+	return updatedAt;
+};
+
+const fetchDailyVideos = async () => {
+	const response = await payrollClient.get({
+		...DAILY_VIDEO_STORE,
+		index: buildDailyVideoIndex(DAILY_VIDEO_KEY),
+		format: { structured: true },
+	});
+	const structured = response.data?.values?.[0]?.structured || [];
+	if (structured.length === 0) {
+		return { videos: [] as DailyVideo[], updatedAt: null as string | null };
+	}
+	const record = valuesToObject(structured) as {
+		videos?: DailyVideo[];
+		updated_at?: string;
+	};
+	return {
+		videos: Array.isArray(record.videos) ? record.videos : [],
+		updatedAt: record.updated_at ?? null,
+	};
+};
+
+const saveDailyVideos = async (videos: DailyVideo[]) => {
+	const updatedAt = new Date().toISOString();
+	const data = CreateData([
+		CreateValue(DataType.string, DAILY_VIDEO_KEY, "key"),
+		CreateValue(DataType.object, videos, "videos"),
+		CreateValue(DataType.string, updatedAt, "updated_at"),
+	]);
+
+	await payrollClient.set({
+		...DAILY_VIDEO_STORE,
+		index: buildDailyVideoIndex(DAILY_VIDEO_KEY),
 		data,
 		format: { structured: true },
 	});
@@ -700,7 +762,7 @@ function AdminPanel() {
 }
 
 function ManagementPanel() {
-	const [activeTab, setActiveTab] = useState<"feedback" | "users" | "payroll" | "roles">("users");
+	const [activeTab, setActiveTab] = useState<"feedback" | "users" | "payroll" | "roles" | "daily">("users");
 
 	return (
 		<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "feedback" | "users" | "payroll" | "roles")}>
@@ -723,6 +785,9 @@ function ManagementPanel() {
 							<TabsTrigger value="payroll" className="justify-start w-full flex-none">
 								Payroll
 							</TabsTrigger>
+							<TabsTrigger value="daily" className="justify-start w-full flex-none">
+								Daily video
+							</TabsTrigger>
 							<TabsTrigger value="roles" className="justify-start w-full flex-none">
 								Roles & inflow
 							</TabsTrigger>
@@ -739,6 +804,9 @@ function ManagementPanel() {
 					</TabsContent>
 					<TabsContent value="payroll" className="mt-0">
 						<PayrollPanel />
+					</TabsContent>
+					<TabsContent value="daily" className="mt-0">
+						<DailyVideoPanel />
 					</TabsContent>
 					<TabsContent value="roles" className="mt-0">
 						<TrainingRolesPanel />
@@ -3425,6 +3493,316 @@ function TrainingRolesPanel() {
 	);
 }
 
+function DailyVideoPanel() {
+	const [videoTitle, setVideoTitle] = useState("");
+	const [videoDescription, setVideoDescription] = useState("");
+	const [videoFile, setVideoFile] = useState<File | null>(null);
+	const [videoDuration, setVideoDuration] = useState(0);
+	const [status, setStatus] = useState("");
+	const [statsVideoId, setStatsVideoId] = useState<string>("");
+
+	const queryClient = useQueryClient();
+	const usersOrm = UsersORM.getInstance();
+	const progressOrm = UserProgressORM.getInstance();
+
+	const { data: dailyData } = useQuery({
+		queryKey: ["dailyVideos"],
+		queryFn: () => fetchDailyVideos(),
+	});
+	const dailyVideos = dailyData?.videos ?? [];
+
+	const { data: allUsers = [] } = useQuery({
+		queryKey: ["allUsers"],
+		queryFn: () => usersOrm.getAllUsers(),
+	});
+
+	const { data: allProgress = [] } = useQuery({
+		queryKey: ["dailyVideoProgress", statsVideoId],
+		queryFn: () => progressOrm.getAllUserProgress(),
+		enabled: Boolean(statsVideoId),
+	});
+
+	useEffect(() => {
+		if (statsVideoId) return;
+		const active = dailyVideos.find((v) => v.active);
+		if (active) setStatsVideoId(active.id);
+		else if (dailyVideos[0]) setStatsVideoId(dailyVideos[0].id);
+	}, [dailyVideos, statsVideoId]);
+
+	useEffect(() => {
+		if (!videoFile) return;
+		const videoElement = document.createElement("video");
+		videoElement.preload = "metadata";
+		videoElement.onloadedmetadata = () => {
+			setVideoDuration(Math.floor(videoElement.duration));
+			URL.revokeObjectURL(videoElement.src);
+		};
+		videoElement.src = URL.createObjectURL(videoFile);
+	}, [videoFile]);
+
+	const readFileAsDataUrl = (file: File) =>
+		new Promise<string>((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(String(reader.result || ""));
+			reader.onerror = () => reject(new Error("Failed to read file"));
+			reader.readAsDataURL(file);
+		});
+
+	const saveVideos = useMutation({
+		mutationFn: async (videos: DailyVideo[]) => saveDailyVideos(videos),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["dailyVideos"] });
+		},
+	});
+
+	const handlePublish = async () => {
+		if (!videoTitle.trim()) {
+			setStatus("Add a title.");
+			return;
+		}
+		if (!videoFile) {
+			setStatus("Upload a video file.");
+			return;
+		}
+		if (!videoDuration) {
+			setStatus("Video duration is missing.");
+			return;
+		}
+		if (videoFile.size > 70 * 1024 * 1024) {
+			setStatus("Video is too large for in-app storage (70MB limit).");
+			return;
+		}
+
+		setStatus("Uploading...");
+		try {
+			const url = await readFileAsDataUrl(videoFile);
+			const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+			const nextVideo: DailyVideo = {
+				id,
+				title: videoTitle.trim(),
+				description: videoDescription.trim(),
+				url,
+				duration: videoDuration,
+				created_at: new Date().toISOString(),
+				active: true,
+			};
+			const nextVideos = dailyVideos.map((v) => ({ ...v, active: false })).concat(nextVideo);
+			await saveVideos.mutateAsync(nextVideos);
+			setVideoTitle("");
+			setVideoDescription("");
+			setVideoFile(null);
+			setVideoDuration(0);
+			setStatus("Daily video published.");
+		} catch (error) {
+			setStatus(error instanceof Error ? error.message : "Failed to upload.");
+		}
+	};
+
+	const setActiveVideo = async (id: string) => {
+		const nextVideos = dailyVideos.map((v) => ({ ...v, active: v.id === id }));
+		await saveVideos.mutateAsync(nextVideos);
+		setStatsVideoId(id);
+	};
+
+	const deleteVideo = async (id: string) => {
+		const nextVideos = dailyVideos.filter((v) => v.id !== id);
+		await saveVideos.mutateAsync(nextVideos);
+		if (statsVideoId === id) {
+			const next = nextVideos.find((v) => v.active) || nextVideos[0];
+			setStatsVideoId(next ? next.id : "");
+		}
+	};
+
+	const progressByUser = useMemo(() => {
+		if (!statsVideoId) return new Map<string, UserProgressModel>();
+		const map = new Map<string, UserProgressModel>();
+		for (const entry of allProgress) {
+			if (entry.video_id !== statsVideoId) continue;
+			map.set(entry.user_id, entry);
+		}
+		return map;
+	}, [allProgress, statsVideoId]);
+
+	const chatters = useMemo(() => allUsers.filter((u) => !u.is_admin), [allUsers]);
+
+	return (
+		<Card className="chatter-panel">
+			<CardHeader>
+				<CardTitle className="text-slate-100">Daily Video</CardTitle>
+				<CardDescription className="text-slate-400">
+					Upload a daily video that appears on the chatter dashboard.
+				</CardDescription>
+			</CardHeader>
+			<CardContent className="space-y-6">
+				<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+					<div className="space-y-4">
+						<div className="space-y-2">
+							<Label htmlFor="dailyTitle">Title</Label>
+							<Input
+								id="dailyTitle"
+								value={videoTitle}
+								onChange={(e) => setVideoTitle(e.target.value)}
+								placeholder="Daily focus video title"
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor="dailyFile">Upload video file</Label>
+							<input
+								id="dailyFile"
+								type="file"
+								accept="video/*"
+								onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+							/>
+							{videoFile && (
+								<p className="text-xs text-slate-400">
+									Selected: {videoFile.name} ({(videoFile.size / 1024 / 1024).toFixed(2)} MB)
+								</p>
+							)}
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor="dailyDescription">Description</Label>
+							<Textarea
+								id="dailyDescription"
+								value={videoDescription}
+								onChange={(e) => setVideoDescription(e.target.value)}
+								placeholder="Short summary for chatters"
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor="dailyDuration">Duration (seconds)</Label>
+							<Input
+								id="dailyDuration"
+								type="number"
+								value={videoDuration}
+								min={0}
+								onChange={(e) => setVideoDuration(Number(e.target.value || 0))}
+							/>
+						</div>
+						<div className="flex items-center gap-3">
+							<Button onClick={handlePublish} disabled={saveVideos.isPending}>
+								Publish daily video
+							</Button>
+							{status && <span className="text-xs text-slate-400">{status}</span>}
+						</div>
+					</div>
+					<div className="space-y-3">
+						<p className="text-sm text-slate-400">
+							Active daily videos ({dailyVideos.length})
+						</p>
+						{dailyVideos.length === 0 && (
+							<p className="text-sm text-slate-500">No daily videos yet.</p>
+						)}
+						{dailyVideos.map((video) => (
+							<div key={video.id} className="flex flex-col gap-2 p-3 border border-slate-700 rounded-lg chatter-panel">
+								<div className="flex items-center justify-between gap-2">
+									<div>
+										<p className="text-slate-100 font-medium">{video.title}</p>
+										<p className="text-xs text-slate-400">
+											{video.description || "No description"} • {Math.floor(video.duration)}s
+										</p>
+									</div>
+									<div className="flex items-center gap-2">
+										{video.active && (
+											<Badge variant="outline" className="border-emerald-400/60 text-emerald-300">
+												Active
+											</Badge>
+										)}
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => setActiveVideo(video.id)}
+											disabled={video.active}
+										>
+											Set active
+										</Button>
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => deleteVideo(video.id)}
+										>
+											Delete
+										</Button>
+									</div>
+								</div>
+							</div>
+						))}
+					</div>
+				</div>
+
+				<div className="space-y-3">
+					<div className="flex flex-wrap items-center justify-between gap-3">
+						<div>
+							<p className="text-sm text-slate-300">Daily video progress</p>
+							<p className="text-xs text-slate-500">Select a video to see who completed it.</p>
+						</div>
+						<select
+							className="rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100"
+							value={statsVideoId}
+							onChange={(e) => setStatsVideoId(e.target.value)}
+						>
+							{dailyVideos.map((video) => (
+								<option key={video.id} value={video.id}>
+									{video.title}
+								</option>
+							))}
+						</select>
+					</div>
+					{!statsVideoId && (
+						<p className="text-sm text-slate-500">No daily videos to track yet.</p>
+					)}
+					{statsVideoId && (
+						<div className="rounded-lg border border-slate-700 overflow-hidden">
+							<table className="w-full text-sm">
+								<thead className="bg-slate-900/60 text-slate-400">
+									<tr>
+										<th className="text-left px-4 py-2">Chatter</th>
+										<th className="text-left px-4 py-2">Inflow</th>
+										<th className="text-left px-4 py-2">Status</th>
+										<th className="text-left px-4 py-2">Completed at</th>
+									</tr>
+								</thead>
+								<tbody className="text-slate-200">
+									{chatters.map((user) => {
+										const progress = progressByUser.get(user.id);
+										const completed = Boolean(progress?.is_completed);
+										return (
+											<tr key={user.id} className="border-t border-slate-800">
+												<td className="px-4 py-2">{user.name || user.email}</td>
+												<td className="px-4 py-2 text-slate-400">{user.inflow_username || "-"}</td>
+												<td className="px-4 py-2">
+													{completed ? (
+														<Badge className="bg-emerald-500/20 text-emerald-200 border border-emerald-400/50">
+															Completed
+														</Badge>
+													) : (
+														<Badge variant="outline" className="border-slate-700 text-slate-400">
+															Not yet
+														</Badge>
+													)}
+												</td>
+												<td className="px-4 py-2 text-slate-400">
+													{completed ? new Date(progress?.completed_at || "").toLocaleString() : "-"}
+												</td>
+											</tr>
+										);
+									})}
+									{chatters.length === 0 && (
+										<tr>
+											<td colSpan={4} className="px-4 py-6 text-center text-slate-500">
+												No chatters found.
+											</td>
+										</tr>
+									)}
+								</tbody>
+							</table>
+						</div>
+					)}
+				</div>
+			</CardContent>
+		</Card>
+	);
+}
+
 function AllSubmissionsPanel() {
 	const completionsOrm = CompletionsORM.getInstance();
 	const quizAttemptsOrm = QuizAttemptsORM.getInstance();
@@ -3858,11 +4236,13 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 	const [calendarMonth, setCalendarMonth] = useState<Date | null>(null);
 	const [showBulzeDetails, setShowBulzeDetails] = useState(false);
+	const [dailyDialogOpen, setDailyDialogOpen] = useState(false);
 	const { data: chatterMetaResponse } = useQuery({
 		queryKey: ["chatterAdminMeta", user.id],
 		queryFn: () => fetchChatterAdminMeta(user.id),
 	});
 	const usersOrm = UsersORM.getInstance();
+	const progressOrm = UserProgressORM.getInstance();
 	const isBulzeUser = ["bulze"].includes(normalizeName(user.name)) || ["bulze"].includes(normalizeName(user.inflow_username));
 
 	const loadSnapshot = async () => {
@@ -3910,6 +4290,24 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const bonusEntries = Array.isArray(chatterMeta?.bonus_entries) ? chatterMeta.bonus_entries : [];
 	const loginStreak = Number(chatterMeta?.login_streak ?? 0);
 	const sales = Number(employee?.sales ?? 0);
+	const { data: dailyVideoResponse } = useQuery({
+		queryKey: ["dailyVideos"],
+		queryFn: () => fetchDailyVideos(),
+	});
+	const activeDailyVideo = useMemo(
+		() => dailyVideoResponse?.videos?.find((video) => video.active) ?? null,
+		[dailyVideoResponse],
+	);
+	const { data: dailyProgress } = useQuery({
+		queryKey: ["videoProgress", user.id, activeDailyVideo?.id],
+		enabled: Boolean(activeDailyVideo),
+		queryFn: async () => {
+			if (!activeDailyVideo) return null;
+			const progress = await progressOrm.getUserProgressByUserIdVideoId(user.id, activeDailyVideo.id);
+			return progress[0] || null;
+		},
+	});
+	const dailyCompleted = Boolean(dailyProgress?.is_completed);
 
 	const computeShiftBonus = (value: number) => {
 		if (!Number.isFinite(value) || value <= 0) return 0;
@@ -4314,6 +4712,53 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 							No payroll match found for inflow username "{inflow}". Ask an admin to verify it.
 						</AlertDescription>
 					</Alert>
+				)}
+
+				{activeDailyVideo && (
+					<Card className="chatter-panel daily-video-card">
+						<CardHeader className="py-4">
+							<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+								<div>
+									<CardTitle className="text-sm text-slate-200">Daily video</CardTitle>
+									<CardDescription className="text-slate-400">
+										{activeDailyVideo.title}
+									</CardDescription>
+								</div>
+								<div className="flex items-center gap-3">
+									{dailyCompleted && (
+										<Badge className="bg-emerald-500/20 text-emerald-200 border border-emerald-400/50">
+											Completed
+										</Badge>
+									)}
+									<Dialog open={dailyDialogOpen} onOpenChange={setDailyDialogOpen}>
+										<DialogTrigger asChild>
+											<Button variant="outline" size="sm" className="border-slate-700 hover:bg-slate-800">
+												{dailyCompleted ? "Rewatch" : "Watch"}
+											</Button>
+										</DialogTrigger>
+										<DialogContent className="max-w-4xl">
+											<DialogHeader>
+												<DialogTitle>{activeDailyVideo.title}</DialogTitle>
+												{activeDailyVideo.description && (
+													<DialogDescription>{activeDailyVideo.description}</DialogDescription>
+												)}
+											</DialogHeader>
+											<VideoPlayer
+												video={activeDailyVideo as VideosModel}
+												userId={user.id}
+												onComplete={() => {}}
+												onBack={() => setDailyDialogOpen(false)}
+												variant="daily"
+											/>
+										</DialogContent>
+									</Dialog>
+								</div>
+							</div>
+						</CardHeader>
+						<CardContent className="pt-0 text-sm text-slate-300">
+							<p className="line-clamp-2">{activeDailyVideo.description || "Quick focus video for today."}</p>
+						</CardContent>
+					</Card>
 				)}
 
 				{employee && (
@@ -4733,17 +5178,20 @@ function VideoPlayer({
 	userId,
 	onComplete,
 	onBack,
+	variant = "training",
 }: {
 	video: VideosModel;
 	userId: string;
 	onComplete: () => void;
 	onBack: () => void;
+	variant?: "training" | "daily";
 }) {
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [currentTime, setCurrentTime] = useState(0);
 	const [maxWatchedTime, setMaxWatchedTime] = useState(0);
 	const [hasWatchedFull, setHasWatchedFull] = useState(false);
 	const [skipBlocked, setSkipBlocked] = useState(false);
+	const [showCompletionConfetti, setShowCompletionConfetti] = useState(false);
 	const [ytPlayer, setYtPlayer] = useState<any>(null);
 	const [ytDuration, setYtDuration] = useState(0);
 	const [loomPlayer, setLoomPlayer] = useState<any>(null);
@@ -4757,6 +5205,7 @@ function VideoPlayer({
 	const maxWatchedTimeRef = useRef(0);
 	const lastAutoSaveRef = useRef(0);
 	const vimeoPlayerRef = useRef<Player | null>(null);
+	const completionSeenRef = useRef(false);
 	const queryClient = useQueryClient();
 
 	const progressOrm = UserProgressORM.getInstance();
@@ -4780,6 +5229,7 @@ function VideoPlayer({
 	useEffect(() => {
 		if (existingProgress?.is_completed) {
 			setHasWatchedFull(true);
+			completionSeenRef.current = true;
 		}
 	}, [existingProgress]);
 
@@ -4788,6 +5238,7 @@ function VideoPlayer({
 		setIsPlaying(false);
 		setVimeoDuration(0);
 		setVimeoError(null);
+		completionSeenRef.current = false;
 		const savedTime = existingProgress?.current_timestamp_watched || 0;
 		setCurrentTime(savedTime);
 		setMaxWatchedTime(savedTime);
@@ -5093,6 +5544,14 @@ function VideoPlayer({
 		},
 	});
 
+	useEffect(() => {
+		if (variant !== "daily" || !hasWatchedFull || completionSeenRef.current) return;
+		completionSeenRef.current = true;
+		setShowCompletionConfetti(true);
+		const timer = window.setTimeout(() => setShowCompletionConfetti(false), 2800);
+		return () => window.clearTimeout(timer);
+	}, [variant, hasWatchedFull]);
+
 	const handleTimeUpdate = () => {
 		if (videoRef.current) {
 			const time = videoRef.current.currentTime;
@@ -5244,6 +5703,21 @@ function VideoPlayer({
 								</div>
 							</>
 						)}
+						{variant === "daily" && hasWatchedFull && (
+							<div className="daily-video-complete">
+								<div className="daily-video-complete-badge">
+									<CheckCircle2 className="h-5 w-5" />
+									<span>Completed</span>
+								</div>
+							</div>
+						)}
+						{variant === "daily" && showCompletionConfetti && (
+							<div className="daily-video-confetti">
+								{Array.from({ length: 16 }).map((_, idx) => (
+									<span key={idx} style={{ ["--i" as string]: idx }} />
+								))}
+							</div>
+						)}
 					</div>
 
 					{skipBlocked && (
@@ -5305,8 +5779,9 @@ function VideoPlayer({
 							{!hasWatchedFull && (
 								<Alert className="bg-blue-50 border-blue-200">
 									<AlertDescription className="text-blue-800">
-										Watch at least 95% of the video to unlock the quiz. Current progress:{" "}
-										{ytDuration ? Math.floor((maxWatchedTime / ytDuration) * 100) : video.duration ? Math.floor((maxWatchedTime / video.duration) * 100) : 0}%
+										{variant === "daily"
+											? `Watch at least 95% to mark complete. Current progress: ${ytDuration ? Math.floor((maxWatchedTime / ytDuration) * 100) : video.duration ? Math.floor((maxWatchedTime / video.duration) * 100) : 0}%`
+											: `Watch at least 95% of the video to unlock the quiz. Current progress: ${ytDuration ? Math.floor((maxWatchedTime / ytDuration) * 100) : video.duration ? Math.floor((maxWatchedTime / video.duration) * 100) : 0}%`}
 									</AlertDescription>
 								</Alert>
 							)}
@@ -5315,7 +5790,9 @@ function VideoPlayer({
 								<Alert className="bg-green-50 border-green-200">
 									<CheckCircle2 className="h-4 w-4 text-green-600" />
 									<AlertDescription className="text-green-800">
-										Video completed! You can now proceed to the quiz.
+										{variant === "daily"
+											? "Video completed! Nice work."
+											: "Video completed! You can now proceed to the quiz."}
 									</AlertDescription>
 								</Alert>
 							)}
@@ -5337,8 +5814,9 @@ function VideoPlayer({
 							{!hasWatchedFull && (
 								<Alert className="bg-blue-900/50 border-blue-700">
 									<AlertDescription className="text-blue-200">
-										Watch at least 95% of the video to unlock the quiz. Current progress:{" "}
-										{Math.floor((maxWatchedTime / video.duration) * 100)}%
+										{variant === "daily"
+											? `Watch at least 95% to mark complete. Current progress: ${Math.floor((maxWatchedTime / video.duration) * 100)}%`
+											: `Watch at least 95% of the video to unlock the quiz. Current progress: ${Math.floor((maxWatchedTime / video.duration) * 100)}%`}
 									</AlertDescription>
 								</Alert>
 							)}
@@ -5347,7 +5825,9 @@ function VideoPlayer({
 								<Alert className="bg-green-900/50 border-green-700">
 									<CheckCircle2 className="h-4 w-4 text-green-400" />
 									<AlertDescription className="text-green-200">
-										Video completed! You can now proceed to the quiz.
+										{variant === "daily"
+											? "Video completed! Nice work."
+											: "Video completed! You can now proceed to the quiz."}
 									</AlertDescription>
 								</Alert>
 							)}
@@ -5372,8 +5852,9 @@ function VideoPlayer({
 							{!hasWatchedFull && (
 								<Alert className="bg-blue-900/50 border-blue-700">
 									<AlertDescription className="text-blue-200">
-										Watch at least 95% of the video to unlock the quiz. Current progress:{" "}
-										{vimeoDuration ? Math.floor((maxWatchedTime / vimeoDuration) * 100) : video.duration ? Math.floor((maxWatchedTime / video.duration) * 100) : 0}%
+										{variant === "daily"
+											? `Watch at least 95% to mark complete. Current progress: ${vimeoDuration ? Math.floor((maxWatchedTime / vimeoDuration) * 100) : video.duration ? Math.floor((maxWatchedTime / video.duration) * 100) : 0}%`
+											: `Watch at least 95% of the video to unlock the quiz. Current progress: ${vimeoDuration ? Math.floor((maxWatchedTime / vimeoDuration) * 100) : video.duration ? Math.floor((maxWatchedTime / video.duration) * 100) : 0}%`}
 									</AlertDescription>
 								</Alert>
 							)}
@@ -5382,21 +5863,25 @@ function VideoPlayer({
 								<Alert className="bg-green-900/50 border-green-700">
 									<CheckCircle2 className="h-4 w-4 text-green-400" />
 									<AlertDescription className="text-green-200">
-										Video completed! You can now proceed to the quiz.
+										{variant === "daily"
+											? "Video completed! Nice work."
+											: "Video completed! You can now proceed to the quiz."}
 									</AlertDescription>
 								</Alert>
 							)}
 						</div>
 					)}
 
-					<Button
-						onClick={onComplete}
-						disabled={!hasWatchedFull}
-						className="w-full"
-						size="lg"
-					>
-						{hasWatchedFull ? "Start Quiz" : "Watch full video to unlock quiz"}
-					</Button>
+					{variant !== "daily" && (
+						<Button
+							onClick={onComplete}
+							disabled={!hasWatchedFull}
+							className="w-full"
+							size="lg"
+						>
+							{hasWatchedFull ? "Start Quiz" : "Watch full video to unlock quiz"}
+						</Button>
+					)}
 				</CardContent>
 			</Card>
 		</div>

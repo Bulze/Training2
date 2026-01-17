@@ -417,6 +417,65 @@ code {
 	background: #fbbf24;
 }
 
+.daily-video-card {
+	background: linear-gradient(135deg, rgba(30, 64, 175, 0.18), rgba(15, 23, 42, 0.8));
+	border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.daily-video-complete {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(16, 185, 129, 0.2);
+	backdrop-filter: blur(2px);
+}
+
+.daily-video-complete-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 14px;
+	border-radius: 999px;
+	background: rgba(16, 185, 129, 0.85);
+	color: #ecfdf3;
+	font-weight: 600;
+	box-shadow: 0 10px 20px rgba(16, 185, 129, 0.4);
+}
+
+.daily-video-confetti {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.daily-video-confetti span {
+	position: absolute;
+	top: -20%;
+	left: calc(6% + (var(--i) * 5%));
+	width: 9px;
+	height: 13px;
+	border-radius: 2px;
+	animation: confettiFall 2.4s linear forwards;
+	animation-delay: calc(var(--i) * 0.05s);
+	transform: rotate(20deg);
+	opacity: 0.9;
+}
+
+.daily-video-confetti span:nth-child(3n + 1) {
+	background: #34d399;
+}
+
+.daily-video-confetti span:nth-child(3n + 2) {
+	background: #60a5fa;
+}
+
+.daily-video-confetti span:nth-child(3n + 3) {
+	background: #fbbf24;
+}
+
 @keyframes streakPop {
 	0% {
 		transform: scale(0.9);
