@@ -1,4 +1,3 @@
-import { authApi } from "@/lib/auth-integration";
 import { DataType, Direction, SimpleSelector } from "./common";
 import type {
   Page,
@@ -69,11 +68,16 @@ export class DataStoreClient {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const response = await authApi.post(
-        `${this.host}${endpoint}`,
-        data,
-        { signal: controller.signal }
-      );
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+      const response = await fetch(`${this.host}${endpoint}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(data),
+        signal: controller.signal,
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

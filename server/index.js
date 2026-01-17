@@ -4,6 +4,8 @@ import crypto from "crypto";
 import path from "path";
 import fs from "fs";
 import { Pool } from "pg";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 
 const PORT = Number(process.env.PORT || process.env.LOCAL_API_PORT || 3001);
 const DB_PATH = process.env.LOCAL_DB_PATH || path.join(process.cwd(), "local-db.json");
@@ -12,6 +14,13 @@ const USE_POSTGRES = Boolean(DATABASE_URL);
 const GROK_API_KEY = process.env.GROK_API_KEY || "";
 const GROK_MODEL = process.env.GROK_MODEL || "grok-2-latest";
 const GROK_THRESHOLD = Number.parseFloat(process.env.GROK_THRESHOLD || "0.6");
+const JWT_SECRET = process.env.JWT_SECRET || "";
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
+const USERS_NAMESPACE = process.env.USERS_NAMESPACE || "01987547fc6c72ecb453bd2736bd4ea0";
+const USERS_NAME = process.env.USERS_NAME || "users";
+const USERS_ENTITY = `${USERS_NAMESPACE}:${USERS_NAME}`;
+const ADMIN_BOOTSTRAP_PASSWORD = process.env.ADMIN_BOOTSTRAP_PASSWORD || "";
+const ADMIN_BOOTSTRAP_EMAIL = process.env.ADMIN_BOOTSTRAP_EMAIL || "admin@platform.com";
 
 const app = express();
 app.use(cors());
@@ -400,8 +409,161 @@ function parseJsonObject(text) {
   }
 }
 
+function sanitizeUser(user) {
+  if (!user) return null;
+  const {
+    password,
+    password_hash,
+    ...rest
+  } = user;
+  return rest;
+}
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function signToken(user) {
+  return jwt.sign(
+    { sub: user.id, is_admin: Boolean(user.is_admin) },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN },
+  );
+}
+
+async function findUserByEmail(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+  const records = await loadRecords(USERS_ENTITY);
+  return records.find((record) => normalizeEmail(record.email) === normalized) || null;
+}
+
+function requireAuth(req, res, next) {
+  if (!JWT_SECRET) {
+    res.status(500).json({ error: "auth_not_configured" });
+    return;
+  }
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  if (!token) {
+    res.status(401).json({ error: "missing_token" });
+    return;
+  }
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.user = payload;
+    next();
+  } catch {
+    res.status(401).json({ error: "invalid_token" });
+  }
+}
+
 app.get("/me", (_req, res) => {
   res.json({ ok: true, userId: "local-user" });
+});
+
+app.post("/auth/login", async (req, res) => {
+  if (!JWT_SECRET) {
+    res.status(500).json({ error: "auth_not_configured" });
+    return;
+  }
+  const { email, password } = req.body || {};
+  if (!email || !password) {
+    res.status(400).json({ error: "missing_credentials" });
+    return;
+  }
+  let user = await findUserByEmail(email);
+  if (!user && normalizeEmail(email) === normalizeEmail(ADMIN_BOOTSTRAP_EMAIL) && ADMIN_BOOTSTRAP_PASSWORD) {
+    if (String(password) === String(ADMIN_BOOTSTRAP_PASSWORD)) {
+      const hashed = await bcrypt.hash(String(password), 10);
+      user = await upsertRecord(
+        USERS_ENTITY,
+        {
+          name: "Admin",
+          email: normalizeEmail(email),
+          is_admin: true,
+          is_approved: true,
+          role: "admin",
+          password_hash: hashed,
+          password: null,
+        },
+      );
+    }
+  }
+  if (!user) {
+    res.status(401).json({ error: "invalid_credentials" });
+    return;
+  }
+
+  let valid = false;
+  if (user.password_hash) {
+    valid = await bcrypt.compare(String(password), String(user.password_hash));
+  } else if (user.password) {
+    valid = String(password) === String(user.password);
+  }
+
+  if (!valid) {
+    res.status(401).json({ error: "invalid_credentials" });
+    return;
+  }
+
+  let finalUser = user;
+  if (!user.password_hash) {
+    const hashed = await bcrypt.hash(String(password), 10);
+    const updated = { ...user, password_hash: hashed, password: null };
+    finalUser = await upsertRecord(USERS_ENTITY, updated, user);
+  }
+
+  res.json({
+    token: signToken(finalUser),
+    user: sanitizeUser(finalUser),
+  });
+});
+
+app.post("/auth/register", async (req, res) => {
+  if (!JWT_SECRET) {
+    res.status(500).json({ error: "auth_not_configured" });
+    return;
+  }
+  const { name, email, password, discord_username, discord_nickname } = req.body || {};
+  if (!name || !email || !password) {
+    res.status(400).json({ error: "missing_fields" });
+    return;
+  }
+  if (normalizeEmail(email) === normalizeEmail(ADMIN_BOOTSTRAP_EMAIL)) {
+    res.status(403).json({ error: "admin_registration_blocked" });
+    return;
+  }
+  const existing = await findUserByEmail(email);
+  if (existing) {
+    res.status(409).json({ error: "email_exists" });
+    return;
+  }
+  const hashed = await bcrypt.hash(String(password), 10);
+  const created = await upsertRecord(USERS_ENTITY, {
+    name: String(name).trim(),
+    email: normalizeEmail(email),
+    is_admin: false,
+    is_approved: false,
+    role: "recruit",
+    discord_username: discord_username ? String(discord_username).trim() : "",
+    discord_nickname: discord_nickname ? String(discord_nickname).trim() : "",
+    inflow_username: "",
+    password_hash: hashed,
+    password: null,
+  });
+  res.status(201).json({ user: sanitizeUser(created) });
+});
+
+app.get("/auth/me", requireAuth, async (req, res) => {
+  const userId = req.user?.sub;
+  if (!userId) {
+    res.status(401).json({ error: "invalid_token" });
+    return;
+  }
+  const records = await loadRecords(USERS_ENTITY);
+  const user = records.find((record) => record.id === userId) || null;
+  res.json({ user: sanitizeUser(user) });
 });
 
 async function handleAiEvaluate(req, res) {

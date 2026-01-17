@@ -46,10 +46,11 @@ export const Route = createFileRoute("/")({
 	component: App,
 });
 
-const ADMIN_PASSWORD = "K7M2X9Q8LP";
 const ADMIN_EMAIL = "admin@platform.com";
 const DEFAULT_ROLE = "recruit";
 const PAYROLL_API_BASE = import.meta.env.VITE_PAYROLL_API_BASE || "http://localhost:5000";
+const AUTH_TOKEN_KEY = "auth_token";
+const AUTH_API_BASE = import.meta.env.VITE_API_BASE_PATH || "http://localhost:3001";
 const PAYROLL_STORE = {
 	id: "payroll_snapshot_v1",
 	namespace: "training_app",
@@ -559,7 +560,7 @@ async function evaluateAnswerWithGrok(
 function App() {
 	const [view, setView] = useState<"admin" | "user">("user");
 	const [currentUser, setCurrentUser] = useState<UsersModel | null>(null);
-	const isAdmin = Boolean(currentUser?.is_admin || currentUser?.email === ADMIN_EMAIL);
+	const isAdmin = Boolean(currentUser?.is_admin);
 	const isApproved = Boolean(currentUser && (isAdmin || currentUser.is_approved));
 	const [streakCelebration, setStreakCelebration] = useState<{ streak: number; dateKey: string } | null>(null);
 
@@ -623,32 +624,29 @@ function App() {
 
 	// Check for logged in user on mount
 	useEffect(() => {
-		const storedUserId = localStorage.getItem("current_user_id") || sessionStorage.getItem("current_user_id");
-		if (storedUserId && !localStorage.getItem("current_user_id")) {
-			localStorage.setItem("current_user_id", storedUserId);
-			sessionStorage.removeItem("current_user_id");
-		}
-		const userId = storedUserId;
-		if (userId) {
-			const usersOrm = UsersORM.getInstance();
-			usersOrm.getUsersByIDs([userId]).then((users) => {
-				if (users.length > 0) {
-					setCurrentUser(users[0]);
-					updateLoginStreakForUser(users[0])
-						.then((result) => {
-							if (result) triggerStreakCelebration(users[0].id, result.streak, result.dateKey);
-						})
-						.catch(() => {});
-				} else {
-					sessionStorage.removeItem("current_user_id");
-				}
+		const token = localStorage.getItem(AUTH_TOKEN_KEY);
+		if (!token) return;
+		fetch(`${AUTH_API_BASE}/auth/me`, {
+			headers: { Authorization: `Bearer ${token}` },
+		})
+			.then((res) => (res.ok ? res.json() : Promise.reject(new Error("Auth failed"))))
+			.then((data) => {
+				if (!data?.user) throw new Error("No user");
+				setCurrentUser(data.user);
+				updateLoginStreakForUser(data.user)
+					.then((result) => {
+						if (result) triggerStreakCelebration(data.user.id, result.streak, result.dateKey);
+					})
+					.catch(() => {});
+			})
+			.catch(() => {
+				localStorage.removeItem(AUTH_TOKEN_KEY);
 			});
-		}
 	}, []);
 
-	const handleLogin = (user: UsersModel) => {
+	const handleLogin = (user: UsersModel, token: string) => {
 		setCurrentUser(user);
-		localStorage.setItem("current_user_id", user.id);
+		localStorage.setItem(AUTH_TOKEN_KEY, token);
 		updateLoginStreakForUser(user)
 			.then((result) => {
 				if (result) triggerStreakCelebration(user.id, result.streak, result.dateKey);
@@ -658,8 +656,7 @@ function App() {
 
 	const handleLogout = () => {
 		setCurrentUser(null);
-		localStorage.removeItem("current_user_id");
-		sessionStorage.removeItem("current_user_id");
+		localStorage.removeItem(AUTH_TOKEN_KEY);
 	};
 
 	// Show login screen if no user is logged in and in user view
@@ -6473,7 +6470,7 @@ function PendingApprovalScreen({ user, onLogout }: { user: UsersModel; onLogout:
 	);
 }
 
-function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
+function LoginScreen({ onLogin }: { onLogin: (user: UsersModel, token: string) => void }) {
 	const [name, setName] = useState("");
 	const [email, setEmail] = useState("");
 	const [discordUsername, setDiscordUsername] = useState("");
@@ -6484,58 +6481,39 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 	const [showAdminLogin, setShowAdminLogin] = useState(false);
 	const [adminPassword, setAdminPassword] = useState("");
 
-	const usersOrm = UsersORM.getInstance();
-
-	// Create admin user if not exists
-	const ensureAdminExists = async () => {
-		try {
-			const [existingAdmins] = await usersOrm.listUsers({
-				simples: [
-					{
-						symbol: SimpleSelector.equal,
-						field: "email",
-						value: CreateValue(DataType.string, ADMIN_EMAIL),
-					},
-				],
-				multiples: [],
-				groups: [],
-				unwinds: [],
-			});
-
-			if (existingAdmins.length === 0) {
-				// Create admin user
-				await usersOrm.insertUsers([
-					{
-						name: "Admin",
-						email: ADMIN_EMAIL,
-						is_admin: true,
-						is_approved: true,
-						role: "admin",
-						password: null,
-					} as UsersModel,
-				]);
-				return;
-			}
-
-			const admin = existingAdmins[0];
-			if (!admin.is_admin || !admin.is_approved || admin.role !== "admin" || admin.password !== null) {
-				await usersOrm.setUsersById(admin.id, {
-					...admin,
-					is_admin: true,
-					is_approved: true,
-					role: "admin",
-					password: null,
-				});
-			}
-		} catch (err) {
-			console.error("Failed to create admin user:", err);
+	const loginWithPassword = async (loginEmail: string, loginPassword: string) => {
+		const response = await fetch(`${AUTH_API_BASE}/auth/login`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+		});
+		const data = await response.json().catch(() => ({}));
+		if (!response.ok) {
+			const message = data?.error || "login_failed";
+			throw new Error(message);
 		}
+		return data;
 	};
 
-	// Ensure admin exists on mount
-	useEffect(() => {
-		ensureAdminExists();
-	}, []);
+	const registerUser = async () => {
+		const response = await fetch(`${AUTH_API_BASE}/auth/register`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				name: name.trim(),
+				email: email.trim().toLowerCase(),
+				password: password.trim(),
+				discord_username: discordUsername.trim(),
+				discord_nickname: discordNickname.trim(),
+			}),
+		});
+		const data = await response.json().catch(() => ({}));
+		if (!response.ok) {
+			const message = data?.error || "register_failed";
+			throw new Error(message);
+		}
+		return data;
+	};
 
 	const handleAdminLogin = async () => {
 		if (!adminPassword.trim()) {
@@ -6543,63 +6521,12 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 			return;
 		}
 
-		if (adminPassword !== ADMIN_PASSWORD) {
-			setError("Invalid admin credentials");
-			return;
-		}
-
 		setIsLoading(true);
 		setError(null);
 
 		try {
-			const [admins] = await usersOrm.listUsers({
-				simples: [
-					{
-						symbol: SimpleSelector.equal,
-						field: "email",
-						value: CreateValue(DataType.string, ADMIN_EMAIL),
-					},
-				],
-				multiples: [],
-				groups: [],
-				unwinds: [],
-			});
-
-			if (admins.length === 0) {
-				await ensureAdminExists();
-			}
-
-			const [adminUser] = await usersOrm.listUsers({
-				simples: [
-					{
-						symbol: SimpleSelector.equal,
-						field: "email",
-						value: CreateValue(DataType.string, ADMIN_EMAIL),
-					},
-				],
-				multiples: [],
-				groups: [],
-				unwinds: [],
-			});
-
-			if (!adminUser) {
-				setError("Admin account not found");
-				return;
-			}
-
-			let finalAdmin = adminUser;
-			if (!adminUser.is_admin || !adminUser.is_approved || adminUser.role !== "admin" || adminUser.password !== null) {
-				finalAdmin = {
-					...adminUser,
-					is_admin: true,
-					is_approved: true,
-					role: "admin",
-					password: null,
-				};
-				await usersOrm.setUsersById(adminUser.id, finalAdmin);
-			}
-
-			onLogin(finalAdmin);
+			const result = await loginWithPassword(ADMIN_EMAIL, adminPassword.trim());
+			onLogin(result.user, result.token);
 		} catch (err) {
 			setError(`Failed to login: ${err instanceof Error ? err.message : "Unknown error"}`);
 		} finally {
@@ -6624,48 +6551,28 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 		setError(null);
 
 		try {
-			// Check if user with this email already exists
-			const [existingUsers] = await usersOrm.listUsers({
-				simples: [
-					{
-						symbol: SimpleSelector.equal,
-						field: "email",
-						value: CreateValue(DataType.string, email.toLowerCase()),
-					},
-				],
-				multiples: [],
-				groups: [],
-				unwinds: [],
-			});
-
-			let user: UsersModel;
-
-			if (existingUsers.length > 0) {
-				// User exists, use existing account
-				user = existingUsers[0];
-				if (user.password && user.password !== password.trim()) {
-					setError("Invalid email or password");
-					return;
+			let result;
+			try {
+				result = await loginWithPassword(email.trim().toLowerCase(), password.trim());
+			} catch (err) {
+				const message = err instanceof Error ? err.message : "";
+				if (message === "invalid_credentials") {
+					try {
+						await registerUser();
+					} catch (registerError) {
+						const registerMessage = registerError instanceof Error ? registerError.message : "";
+						if (registerMessage === "email_exists") {
+							throw new Error("invalid_credentials");
+						}
+						throw registerError;
+					}
+					result = await loginWithPassword(email.trim().toLowerCase(), password.trim());
+				} else {
+					throw err;
 				}
-			} else {
-				// Create new user
-				const [newUser] = await usersOrm.insertUsers([
-					{
-						name: name.trim(),
-						email: email.toLowerCase().trim(),
-						is_admin: false,
-						is_approved: false,
-						role: DEFAULT_ROLE,
-						discord_username: discordUsername.trim(),
-						discord_nickname: discordNickname.trim(),
-						inflow_username: "",
-						password: password.trim(),
-					} as UsersModel,
-				]);
-				user = newUser;
 			}
 
-			onLogin(user);
+			onLogin(result.user, result.token);
 		} catch (err) {
 			setError(`Failed to login: ${err instanceof Error ? err.message : "Unknown error"}`);
 		} finally {
@@ -6789,7 +6696,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: UsersModel) => void }) {
 							</Button>
 
 							<p className="text-sm text-slate-500 text-center">
-								Your progress will be saved and tracked individually · Build 2026-01-11
+								Your progress will be saved and tracked individually A? Build 2026-01-11
 							</p>
 						</>
 					) : (
