@@ -473,22 +473,22 @@ app.post("/auth/login", async (req, res) => {
     return;
   }
   let user = await findUserByEmail(email);
-  if (!user && normalizeEmail(email) === normalizeEmail(ADMIN_BOOTSTRAP_EMAIL) && ADMIN_BOOTSTRAP_PASSWORD) {
-    if (String(password) === String(ADMIN_BOOTSTRAP_PASSWORD)) {
-      const hashed = await bcrypt.hash(String(password), 10);
-      user = await upsertRecord(
-        USERS_ENTITY,
-        {
-          name: "Admin",
-          email: normalizeEmail(email),
-          is_admin: true,
-          is_approved: true,
-          role: "admin",
-          password_hash: hashed,
-          password: null,
-        },
-      );
-    }
+  const isBootstrapEmail = normalizeEmail(email) === normalizeEmail(ADMIN_BOOTSTRAP_EMAIL);
+  const canBootstrap = isBootstrapEmail && ADMIN_BOOTSTRAP_PASSWORD && String(password) === String(ADMIN_BOOTSTRAP_PASSWORD);
+  if (!user && canBootstrap) {
+    const hashed = await bcrypt.hash(String(password), 10);
+    user = await upsertRecord(
+      USERS_ENTITY,
+      {
+        name: "Admin",
+        email: normalizeEmail(email),
+        is_admin: true,
+        is_approved: true,
+        role: "admin",
+        password_hash: hashed,
+        password: null,
+      },
+    );
   }
   if (!user) {
     res.status(401).json({ error: "invalid_credentials" });
@@ -500,6 +500,8 @@ app.post("/auth/login", async (req, res) => {
     valid = await bcrypt.compare(String(password), String(user.password_hash));
   } else if (user.password) {
     valid = String(password) === String(user.password);
+  } else if (canBootstrap && user.is_admin) {
+    valid = true;
   }
 
   if (!valid) {
