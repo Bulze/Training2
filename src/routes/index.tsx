@@ -623,7 +623,12 @@ function App() {
 
 	// Check for logged in user on mount
 	useEffect(() => {
-		const userId = sessionStorage.getItem("current_user_id");
+		const storedUserId = localStorage.getItem("current_user_id") || sessionStorage.getItem("current_user_id");
+		if (storedUserId && !localStorage.getItem("current_user_id")) {
+			localStorage.setItem("current_user_id", storedUserId);
+			sessionStorage.removeItem("current_user_id");
+		}
+		const userId = storedUserId;
 		if (userId) {
 			const usersOrm = UsersORM.getInstance();
 			usersOrm.getUsersByIDs([userId]).then((users) => {
@@ -643,7 +648,7 @@ function App() {
 
 	const handleLogin = (user: UsersModel) => {
 		setCurrentUser(user);
-		sessionStorage.setItem("current_user_id", user.id);
+		localStorage.setItem("current_user_id", user.id);
 		updateLoginStreakForUser(user)
 			.then((result) => {
 				if (result) triggerStreakCelebration(user.id, result.streak, result.dateKey);
@@ -653,6 +658,7 @@ function App() {
 
 	const handleLogout = () => {
 		setCurrentUser(null);
+		localStorage.removeItem("current_user_id");
 		sessionStorage.removeItem("current_user_id");
 	};
 
