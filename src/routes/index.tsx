@@ -4899,10 +4899,10 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 
 				{activeDailyVideo && (
 					<div className="daily-card-shell chatter-panel">
-						<div className="flex items-center justify-between">
+						<div className="daily-card-header flex items-center justify-between">
 							<div>
-								<CardTitle className="text-sm text-slate-200">Daily video</CardTitle>
-								<CardDescription className="text-slate-400">Quick focus video for today.</CardDescription>
+								<CardTitle className="daily-card-title">Daily video</CardTitle>
+								<CardDescription className="daily-card-subtitle">Quick focus video for today.</CardDescription>
 							</div>
 							{dailyCompleted && (
 								<Badge className="bg-emerald-500/20 text-emerald-200 border border-emerald-400/50">
