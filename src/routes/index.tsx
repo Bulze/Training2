@@ -4886,7 +4886,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				)}
 
 				{activeDailyVideo && (
-					<div className="daily-card-shell">
+					<div className={cn("daily-card-shell chatter-panel")}>
 						<div className="flex items-center justify-between">
 							<div>
 								<h3 className="text-sm font-semibold text-slate-200">Daily video</h3>
