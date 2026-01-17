@@ -4383,6 +4383,8 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const [showBulzeDetails, setShowBulzeDetails] = useState(false);
 	const [dailyDialogOpen, setDailyDialogOpen] = useState(false);
 	const [dailyCardFlipped, setDailyCardFlipped] = useState(false);
+	const [dailyCardImageUrl, setDailyCardImageUrl] = useState("/thub1.png");
+	const [showAdminReview, setShowAdminReview] = useState(true);
 	const { data: chatterMetaResponse } = useQuery({
 		queryKey: ["chatterAdminMeta", user.id],
 		queryFn: () => fetchChatterAdminMeta(user.id),
@@ -4436,6 +4438,7 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 	const bonusEntries = Array.isArray(chatterMeta?.bonus_entries) ? chatterMeta.bonus_entries : [];
 	const loginStreak = Number(chatterMeta?.login_streak ?? 0);
 	const sales = Number(employee?.sales ?? 0);
+	const adminReview = (chatterMeta?.admin_review || "").trim();
 	const { data: dailyVideoResponse } = useQuery({
 		queryKey: ["dailyVideos"],
 		queryFn: () => fetchDailyVideos(),
@@ -4444,7 +4447,17 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 		() => dailyVideoResponse?.videos?.find((video) => video.active) ?? null,
 		[dailyVideoResponse],
 	);
-	const dailyCardImage = activeDailyVideo?.thumbnail_url || "/thub1.png";
+	const normalizeImageUrl = (raw?: string) => {
+		if (!raw) return "/thub1.png";
+		const trimmed = raw.trim();
+		if (!trimmed) return "/thub1.png";
+		if (trimmed.startsWith("data:") || trimmed.startsWith("http") || trimmed.startsWith("/")) return trimmed;
+		return `https://${trimmed}`;
+	};
+
+	useEffect(() => {
+		setDailyCardImageUrl(normalizeImageUrl(activeDailyVideo?.thumbnail_url));
+	}, [activeDailyVideo]);
 	const { data: dailyProgress } = useQuery({
 		queryKey: ["videoProgress", user.id, activeDailyVideo?.id],
 		enabled: Boolean(activeDailyVideo),
@@ -4837,6 +4850,17 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 				)}
 			</CardHeader>
 			<CardContent className="space-y-6">
+				{showAdminReview && adminReview && (
+					<div className="admin-review-toast">
+						<div className="admin-review-toast-header">
+							<span>Admin review</span>
+							<button type="button" onClick={() => setShowAdminReview(false)} aria-label="Close">
+								×
+							</button>
+						</div>
+						<p>{adminReview}</p>
+					</div>
+				)}
 				{!inflow && (
 					<Alert className="bg-amber-50 border-amber-200">
 						<AlertDescription className="text-amber-800">
@@ -4882,8 +4906,13 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 								<div className="daily-card-inner">
 									<div
 										className="daily-card-face daily-card-front"
-										style={{ backgroundImage: `url(${dailyCardImage})` }}
 									>
+										<img
+											src={dailyCardImageUrl}
+											alt={activeDailyVideo.title}
+											className="daily-card-art"
+											onError={() => setDailyCardImageUrl("/thub1.png")}
+										/>
 										<div className="daily-card-front-title">{activeDailyVideo.title}</div>
 									</div>
 									<div className="daily-card-face daily-card-back">
@@ -4933,19 +4962,6 @@ function ChatterDashboard({ user }: { user: UsersModel }) {
 
 				{employee && (
 					<div className="space-y-6">
-						{(chatterMeta?.admin_review || "").trim() && (
-							<Card className="chatter-panel">
-								<CardHeader className="py-4">
-									<CardTitle className="text-sm text-slate-200">Admin review</CardTitle>
-									<CardDescription className="text-slate-400">Feedback from management</CardDescription>
-								</CardHeader>
-								<CardContent className="pt-0">
-									<p className="text-slate-200 whitespace-pre-wrap">
-										{(chatterMeta?.admin_review || "").trim()}
-									</p>
-								</CardContent>
-							</Card>
-						)}
 						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 							<Card className="stat-card">
 								<CardHeader className="pb-2">
