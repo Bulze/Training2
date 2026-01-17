@@ -1758,10 +1758,16 @@ function UserApprovalsPanel() {
 		},
 	});
 
+	const sortByApprovalTimeDesc = (a: UsersModel, b: UsersModel) =>
+		Number(b.update_time || 0) - Number(a.update_time || 0);
 	const pending = users.filter((user) => !user.is_admin && !user.is_approved);
 	const approved = users.filter((user) => !user.is_admin && user.is_approved);
-	const approvedChatters = approved.filter((user) => (user.role || DEFAULT_ROLE) === "chatter");
-	const approvedRecruits = approved.filter((user) => (user.role || DEFAULT_ROLE) !== "chatter");
+	const approvedChatters = approved
+		.filter((user) => (user.role || DEFAULT_ROLE) === "chatter")
+		.sort(sortByApprovalTimeDesc);
+	const approvedRecruits = approved
+		.filter((user) => (user.role || DEFAULT_ROLE) !== "chatter")
+		.sort(sortByApprovalTimeDesc);
 
 	return (
 		<div className="space-y-6">
@@ -3165,7 +3171,14 @@ function TrainingRolesPanel() {
 			}
 		}
 
-		return { pending, approvedRecruits, approvedChatters };
+		const sortByApprovalTimeDesc = (a: UsersModel, b: UsersModel) =>
+			Number(b.update_time || 0) - Number(a.update_time || 0);
+
+		return {
+			pending,
+			approvedRecruits: approvedRecruits.sort(sortByApprovalTimeDesc),
+			approvedChatters: approvedChatters.sort(sortByApprovalTimeDesc),
+		};
 	}, [filteredUsers]);
 
 	return (
